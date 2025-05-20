@@ -1,0 +1,55 @@
+CREATE TABLE IF NOT EXISTS author (
+    aid integer GENERATED ALWAYS AS IDENTITY,
+    name text NOT NULL UNIQUE,
+    PRIMARY KEY (aid)
+);
+
+CREATE TABLE IF NOT EXISTS auser (
+    author_id integer,
+    email text NOT NULL UNIQUE,
+    pw text NOT NULL,
+    FOREIGN KEY (author_id) REFERENCES author(aid) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS collection (
+    cid integer GENERATED ALWAYS AS IDENTITY,
+    aid integer NOT NULL,
+    name text NOT NULL,
+    description text NOT NULL,
+    is_public boolean DEFAULT false,
+    FOREIGN KEY (aid) REFERENCES author (aid) ON DELETE CASCADE,
+    UNIQUE (aid, name),
+    PRIMARY KEY (cid)
+);
+
+CREATE TABLE IF NOT EXISTS quote (
+    qid integer GENERATED ALWAYS AS IDENTITY,
+    author_id integer NOT NULL,
+    text text NOT NULL,
+    is_public boolean DEFAULT false,
+    FOREIGN KEY (author_id) REFERENCES author (aid) ON DELETE CASCADE,
+    PRIMARY KEY (qid),
+    UNIQUE (text)
+);
+
+CREATE TABLE IF NOT EXISTS collectioncontains (
+    cid integer NOT NULL,
+    qid integer NOT NULL,
+    FOREIGN KEY (cid) REFERENCES collection (cid) ON DELETE CASCADE,
+    FOREIGN KEY (qid) REFERENCES quote (qid) ON DELETE CASCADE,
+    PRIMARY KEY (cid, qid)
+);
+
+CREATE TABLE IF NOT EXISTS tag (
+    tid integer GENERATED ALWAYS AS IDENTITY,
+    name text NOT NULL UNIQUE,
+    PRIMARY KEY (tid)
+);
+
+CREATE TABLE IF NOT EXISTS taggedas (
+    qid integer NOT NULL,
+    tid integer NOT NULL,
+    FOREIGN KEY (qid) REFERENCES quote (qid) ON DELETE CASCADE,
+    FOREIGN KEY (tid) REFERENCES tag (tid) ON DELETE CASCADE,
+    PRIMARY KEY (qid, tid)
+);

@@ -9,38 +9,14 @@ from psycopg import Connection
 import app.security as security
 import app.db as db
 import app.crud as crud
-import app.models as models
+import app.model as model
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 TokenDep = Annotated[str, Depends(oauth2_scheme)]
-ConnectionDep = Annotated[Connection, Depends(db.get_connection)]
-
-app = FastAPI()
-
-@app.post("/token")
-async def login_for_access_token(
-    conn: ConnectionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
-):
-    user = crud.get_user_by_username(conn, form_data.username)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    if not security.verify_password(form_data.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    acces_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
-    acces_token = security.create_access_token(
-        data={"sub": form_data.username}, expires_delta=acces_token_expires
-    )
-    return security.Token(access_token=acces_token, token_type="bearer")
+ConnectionDep = Annotated[Connection, Depends(db.get_connection_gen)]
+PasswordFormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
 
 async def get_current_user(conn: ConnectionDep, token: TokenDep):
     credentials_exception = HTTPException(
@@ -55,28 +31,54 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep):
             raise credentials_exception
     except InvalidTokenError:
         raise credentials_exception
-    user = crud.get_user_by_username(conn, username)
+    user = crud.get_user_by_name(conn, username)
     return user
 
-CurrentUserDep = Annotated[models.User, Depends(get_current_user)]
+CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
+
+app = FastAPI()
+
+@app.post("/token")
+async def login_for_access_token(conn: ConnectionDep, form_data: PasswordFormDep):
+    user = crud.get_user_by_name(conn, form_data.username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    if not security.check_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    acces_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+    acces_token = security.create_access_token(
+        data={"sub": form_data.username}, expires_delta=acces_token_expires
+    )
+    return security.Token(access_token=acces_token, token_type="bearer")
+
 
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
-@app.get("/users/me", response_model=models.User)
+@app.get("/users/me", response_model=model.User)
 async def current_user(current_user: CurrentUserDep):
     return current_user
 
 @app.get("/quotes/me")
 async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
-    return crud.get_quotes_by_user(conn, current_user)
+    author = model.Author(id=current_user.id, name=current_user.username)
+    return crud.get_quotes_by_author(conn, author)
 
 @app.post("/quotes/create")
 async def create_quote(conn: ConnectionDep, current_user: CurrentUserDep, quote_content: str):
-    quote = crud.create_quote_by_user_id(conn, current_user.id, quote_content)
+    query = model.CreateQuoteQuery(author_id=current_user.id, text=quote_content, is_public=True)
+    quote = crud.create_quote(conn, query)
     return quote
 
 @app.get("/quotes")
 async def read_items(conn: ConnectionDep, current_user: CurrentUserDep):
-    return crud.get_all_quotes(conn)
+    return "Hello"

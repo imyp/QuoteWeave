@@ -3,6 +3,6 @@
 set -e
 set -x
 
-python app/db.py drop 
-python app/db.py create
-python app/db.py add-user abc 123
+python cli.py init
+python cli.py populate --file quotes.csv --n-entries 100
+python cli.py create user --name admin --email "admin@example.com" --password admin
