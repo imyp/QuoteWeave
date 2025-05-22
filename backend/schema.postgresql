@@ -28,8 +28,7 @@ CREATE TABLE IF NOT EXISTS quote (
     text text NOT NULL,
     is_public boolean DEFAULT false,
     FOREIGN KEY (author_id) REFERENCES author (aid) ON DELETE CASCADE,
-    PRIMARY KEY (qid),
-    UNIQUE (text)
+    PRIMARY KEY (qid)
 );
 
 CREATE TABLE IF NOT EXISTS collectioncontains (

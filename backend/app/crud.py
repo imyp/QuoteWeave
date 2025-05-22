@@ -1,4 +1,5 @@
 import app.model as model
+import app.security as security
 from psycopg.connection import Connection
 
 
@@ -50,10 +51,11 @@ def create_user_from_author(
 
 def create_user(conn: Connection, query: model.CreateUserQuery) -> model.User:
     create_author(conn, model.CreateAuthorQuery(name=query.username))
+    hashed_password = security.hash_password(query.password)
     return create_user_from_author(
         conn,
         model.CreateUserFromAuthorQuery(
-            username=query.username, email=query.email, password=query.password
+            username=query.username, email=query.email, password=hashed_password
         ),
     )
 

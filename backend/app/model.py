@@ -23,6 +23,15 @@ class User(BaseModel):
     email: str
     password: str
 
+class UserIdResponse(BaseModel):
+    id: int
+
+class UserNameQuery(BaseModel):
+    username: str
+
+class ValidationResponse(BaseModel):
+    valid: bool
+
 class CreateQuoteQuery(BaseModel):
     author_id: int
     text: str
@@ -33,6 +42,9 @@ class Quote(BaseModel):
     author_id: int
     text: str
     is_public: bool
+
+class QuoteCollection(BaseModel):
+    quotes: list[Quote]
 
 class CreateCollectionQuery(BaseModel):
     user_id: int

@@ -64,21 +64,29 @@ async def login_for_access_token(conn: ConnectionDep, form_data: PasswordFormDep
 async def root():
     return {"message": "Hello World"}
 
+@app.post("/users/create", response_model=model.UserIdResponse)
+async def create_new_user(conn: ConnectionDep, query: model.CreateUserQuery):
+    user = crud.create_user(conn, query)
+    return model.UserIdResponse(id=user.id)
+
+@app.get("/users/check-valid-username", response_model=model.ValidationResponse)
+async def check_if_username_is_valid(conn: ConnectionDep, query: model.UserNameQuery):
+    user = crud.get_author_by_name(conn, query.username)
+    return model.ValidationResponse(valid=user is None)
+
+
 @app.get("/users/me", response_model=model.User)
 async def current_user(current_user: CurrentUserDep):
     return current_user
 
-@app.get("/quotes/me")
+@app.get("/quotes/me", response_model=model.QuoteCollection)
 async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
     author = model.Author(id=current_user.id, name=current_user.username)
-    return crud.get_quotes_by_author(conn, author)
+    quotes = crud.get_quotes_by_author(conn, author)
+    return model.QuoteCollection(quotes=quotes)
 
-@app.post("/quotes/create")
+@app.post("/quotes/create", response_model=model.Quote)
 async def create_quote(conn: ConnectionDep, current_user: CurrentUserDep, quote_content: str):
     query = model.CreateQuoteQuery(author_id=current_user.id, text=quote_content, is_public=True)
     quote = crud.create_quote(conn, query)
     return quote
-
-@app.get("/quotes")
-async def read_items(conn: ConnectionDep, current_user: CurrentUserDep):
-    return "Hello"

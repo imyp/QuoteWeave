@@ -37,9 +37,12 @@ def extract_samples_from_file(filename: str, n: int) -> list[Entry]:
                 author = "Unknown"
             entry = Entry(quote=quote, author=author, collection=collection, tags=tags)
             entries.append(entry)
+    if len(entries) != n:
+        raise ValueError(f"Tried to extract {n} entries, only found {len(entries)}")
     return entries
 
 def add_entry_to_db(conn: Connection, entry: Entry):
+    print(f"Adding entry {entry}")
     author = crud.get_author_by_name(conn, entry["author"])
     if author is None:
         author_query = model.CreateAuthorQuery(name=entry["author"])

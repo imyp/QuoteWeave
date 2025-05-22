@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app/
 
-RUN curl -o /app/quotes.csv https://huggingface.co/datasets/jstet/quotes-500k/resolve/main/quotes.csv
+RUN curl --location -o /app/quotes.csv https://huggingface.co/datasets/jstet/quotes-500k/resolve/main/quotes.csv
 
 COPY ./requirements.txt ./requirements.txt
 
@@ -15,6 +15,8 @@ ENV PYTHONPATH=/app
 COPY ./app /app/app
 
 COPY ./cli.py /app/cli.py
+
+COPY ./schema.postgresql /app/schema.postgresql
 
 COPY ./prestart.sh /app/prestart.sh
 
