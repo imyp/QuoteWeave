@@ -72,6 +72,19 @@ services:
         context: ./backend
       ports:
         - "8000:8000"
+  frontend:
+    image: frontend
+    restart: always
+    networks:
+      - default
+    ports:
+      - "5173:80"
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=http://localhost:8000
+        - NODE_ENV=development
+
 volumes:
   app-db-data:
 

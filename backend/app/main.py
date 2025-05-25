@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from jwt.exceptions import InvalidTokenError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from psycopg import Connection
+from starlette.middleware.cors import CORSMiddleware
 
 import app.security as security
 import app.db as db
@@ -37,6 +38,14 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep):
 CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 @app.post("/token")
 async def login_for_access_token(conn: ConnectionDep, form_data: PasswordFormDep):
