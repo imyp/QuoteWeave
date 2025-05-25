@@ -88,6 +88,11 @@ async def check_if_username_is_valid(conn: ConnectionDep, query: model.UserNameQ
 async def current_user(current_user: CurrentUserDep):
     return current_user
 
+@app.get("/quotes/page/{page_number}", response_model=model.QuotePageResponse)
+async def get_quotes_page(conn: ConnectionDep, page_number: int):
+   quotes = crud.get_quotes_for_page(conn, 20, page_number)
+   return model.QuotePageResponse(quotes=quotes)
+
 @app.get("/quotes/me", response_model=model.QuoteCollection)
 async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
     author = model.Author(id=current_user.id, name=current_user.username)

@@ -1,4 +1,4 @@
-import { createUser } from "../query";
+import { createUser } from "../api";
 import { NavLink } from "react-router";
 
 async function create(data: FormData) {

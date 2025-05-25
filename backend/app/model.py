@@ -73,3 +73,14 @@ class Tag(BaseModel):
 class TagQuoteLink(BaseModel):
     tag_id: int
     quote_id: int
+
+class QuotePageEntry(BaseModel):
+    quote_id: int
+    quote_text: str
+    quote_is_public: bool
+    author_id: int
+    author_name: str
+
+
+class QuotePageResponse(BaseModel):
+    quotes: list[QuotePageEntry]

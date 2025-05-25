@@ -7,5 +7,5 @@ export {
     Explore,
     Landing,
     LogIn,
-    SignUp
+    SignUp,
 }
