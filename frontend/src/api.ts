@@ -18,6 +18,10 @@ type QuotePageEntry = {
     author_name: string,
 }
 
+type QuotesTotalPagesResponse = {
+    total_pages: number,
+}
+
 type QuotePageResponse = {
     quotes: Array<QuotePageEntry>
 }
@@ -54,7 +58,19 @@ async function getQuotePage(request: QuotePageRequest): Promise<QuotePageRespons
     return response.json();
 }
 
+async function getQuoteTotalPages(): Promise<QuotesTotalPagesResponse> {
+    const response = await fetch(`${API_URL}/quotes/get-n-pages`, {
+        method: "GET",
+    });
+
+    if (!response.ok) {
+        throw new Error("Network response was not ok");
+    }
+
+    return response.json();
+}
+
 
 export type { QuotePageEntry }
 
-export { createUser, getQuotePage };
+export { createUser, getQuotePage, getQuoteTotalPages };

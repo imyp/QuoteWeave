@@ -1,3 +1,5 @@
+import math
+
 import app.model as model
 import app.security as security
 from psycopg.connection import Connection
@@ -179,6 +181,14 @@ def get_quotes_for_page(conn: Connection, page_size: int, page_number: int):
         )
         for r in response
     ]
+
+def get_quotes_total_pages(conn: Connection, page_size: int) -> int:
+    response = conn.execute("SELECT COUNT(*) FROM quote;").fetchone()
+    if response is None:
+        raise ValueError("Could not count rows in table.")
+    n = response[0]
+    return math.ceil(n / page_size)
+    
 
 def create_collection(
     conn: Connection, query: model.CreateCollectionQuery

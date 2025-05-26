@@ -84,3 +84,6 @@ class QuotePageEntry(BaseModel):
 
 class QuotePageResponse(BaseModel):
     quotes: list[QuotePageEntry]
+
+class QuotesTotalPagesResponse(BaseModel):
+    n_pages: int

@@ -93,6 +93,12 @@ async def get_quotes_page(conn: ConnectionDep, page_number: int):
    quotes = crud.get_quotes_for_page(conn, 20, page_number)
    return model.QuotePageResponse(quotes=quotes)
 
+@app.get("/quotes/get-n-pages", response_model=model.QuotesTotalPagesResponse)
+async def get_quotes_total_pages(conn: ConnectionDep):
+   n_pages = crud.get_quotes_total_pages(conn, 20)
+   return model.QuotesTotalPagesResponse(n_pages=n_pages)
+
+
 @app.get("/quotes/me", response_model=model.QuoteCollection)
 async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
     author = model.Author(id=current_user.id, name=current_user.username)
