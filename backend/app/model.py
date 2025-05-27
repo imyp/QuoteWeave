@@ -43,6 +43,10 @@ class Quote(BaseModel):
     text: str
     is_public: bool
 
+class QuoteSimple(BaseModel):
+    id: int
+    text: str
+
 class QuoteCollection(BaseModel):
     quotes: list[Quote]
 
@@ -58,6 +62,10 @@ class Collection(BaseModel):
     name: str
     description: str
     is_public: bool
+
+class CollectionSimple(BaseModel):
+    id: int
+    name: str
 
 class CollectionQuoteLink(BaseModel):
     quote_id: int
@@ -87,3 +95,9 @@ class QuotePageResponse(BaseModel):
 
 class QuotesTotalPagesResponse(BaseModel):
     n_pages: int
+
+class AuthorResponse(BaseModel):
+    id: int
+    name: str
+    quotes: list[QuoteSimple]
+    collections: list[CollectionSimple]

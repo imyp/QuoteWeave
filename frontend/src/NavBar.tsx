@@ -12,7 +12,7 @@ function NavBar() {
       </div>
       <div className="flex-none">
         <ul className="menu menu-horizontal px-1">
-          <li><NavLink to="/explore" className={({isActive}) => isActive ? "font-bold" : "" }>Explore</NavLink></li>
+          <li><NavLink to="/quotes" className={({isActive}) => isActive ? "font-bold" : "" }>Quotes</NavLink></li>
           <li><NavLink to="/signup" className={({isActive}) => isActive ? "font-bold" : "" }>Sign up</NavLink></li>
           <li><NavLink to="/login" className={({isActive}) => isActive ? "font-bold" : "" }>Log in</NavLink></li>
         </ul>

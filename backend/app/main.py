@@ -110,3 +110,17 @@ async def create_quote(conn: ConnectionDep, current_user: CurrentUserDep, quote_
     query = model.CreateQuoteQuery(author_id=current_user.id, text=quote_content, is_public=True)
     quote = crud.create_quote(conn, query)
     return quote
+
+@app.get("/authors/{author_id}")
+async def get_author_info(conn: ConnectionDep, author_id: int):
+    author = crud.get_author_by_id(conn, author_id)
+    if author is None:
+        raise ValueError(f"No author with id: {author_id}.")
+    qs = crud.get_quotes_by_author(conn, author)
+    cs = crud.get_collections_from_author(conn, author)
+    return model.AuthorResponse(
+        id=author.id,
+        name=author.name,
+        quotes=[model.QuoteSimple(id=q.id, text=q.text) for q in qs],
+        collections=[model.CollectionSimple(id=c.id, name=c.name) for c in cs]
+    )
