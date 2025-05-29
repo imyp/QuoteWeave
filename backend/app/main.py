@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from jwt.exceptions import InvalidTokenError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from psycopg import Connection
+from starlette.middleware.cors import CORSMiddleware
 
 import app.security as security
 import app.db as db
@@ -37,6 +38,14 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep):
 CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 @app.post("/token")
 async def login_for_access_token(conn: ConnectionDep, form_data: PasswordFormDep):
@@ -79,6 +88,17 @@ async def check_if_username_is_valid(conn: ConnectionDep, query: model.UserNameQ
 async def current_user(current_user: CurrentUserDep):
     return current_user
 
+@app.get("/quotes/page/{page_number}", response_model=model.QuotePageResponse)
+async def get_quotes_page(conn: ConnectionDep, page_number: int):
+   quotes = crud.get_quotes_for_page(conn, 20, page_number)
+   return model.QuotePageResponse(quotes=quotes)
+
+@app.get("/quotes/get-n-pages", response_model=model.QuotesTotalPagesResponse)
+async def get_quotes_total_pages(conn: ConnectionDep):
+   n_pages = crud.get_quotes_total_pages(conn, 20)
+   return model.QuotesTotalPagesResponse(n_pages=n_pages)
+
+
 @app.get("/quotes/me", response_model=model.QuoteCollection)
 async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
     author = model.Author(id=current_user.id, name=current_user.username)
@@ -90,3 +110,17 @@ async def create_quote(conn: ConnectionDep, current_user: CurrentUserDep, quote_
     query = model.CreateQuoteQuery(author_id=current_user.id, text=quote_content, is_public=True)
     quote = crud.create_quote(conn, query)
     return quote
+
+@app.get("/authors/{author_id}")
+async def get_author_info(conn: ConnectionDep, author_id: int):
+    author = crud.get_author_by_id(conn, author_id)
+    if author is None:
+        raise ValueError(f"No author with id: {author_id}.")
+    qs = crud.get_quotes_by_author(conn, author)
+    cs = crud.get_collections_from_author(conn, author)
+    return model.AuthorResponse(
+        id=author.id,
+        name=author.name,
+        quotes=[model.QuoteSimple(id=q.id, text=q.text) for q in qs],
+        collections=[model.CollectionSimple(id=c.id, name=c.name) for c in cs]
+    )

@@ -1,3 +1,5 @@
+import math
+
 import app.model as model
 import app.security as security
 from psycopg.connection import Connection
@@ -159,6 +161,35 @@ def get_quotes_by_tag(conn: Connection, tag: model.Tag) -> list[model.Quote]:
     ]
 
 
+def get_quotes_for_page(conn: Connection, page_size: int, page_number: int):
+    offset = (page_number - 1) * page_size
+    response = conn.execute(
+        "SELECT qid, text, is_public, author_id, author.name "
+        "FROM quote JOIN author ON quote.author_id = author.aid "
+        "ORDER BY qid "
+        "LIMIT %s "
+        "OFFSET %s;",
+        (page_size, offset),
+    ).fetchall()
+    return [
+        model.QuotePageEntry(
+            quote_id=r[0],
+            quote_text=r[1],
+            quote_is_public=r[2],
+            author_id=r[3],
+            author_name=r[4]
+        )
+        for r in response
+    ]
+
+def get_quotes_total_pages(conn: Connection, page_size: int) -> int:
+    response = conn.execute("SELECT COUNT(*) FROM quote;").fetchone()
+    if response is None:
+        raise ValueError("Could not count rows in table.")
+    n = response[0]
+    return math.ceil(n / page_size)
+    
+
 def create_collection(
     conn: Connection, query: model.CreateCollectionQuery
 ) -> model.Collection:
@@ -196,10 +227,11 @@ def get_collection_by_id(
         is_public=is_public,
     )
 
+
 def get_collection_by_name(conn: Connection, name: str) -> model.Collection | None:
     response = conn.execute(
         "SELECT cid, aid, name, description, is_public FROM collection WHERE name = %s",
-        (name,)
+        (name,),
     ).fetchone()
     if response is None:
         return None
@@ -269,10 +301,13 @@ def get_tag_by_name(conn: Connection, tag_name: str) -> model.Tag | None:
         return None
     return model.Tag(id=response[0], name=tag_name)
 
-def add_tag_to_quote(conn: Connection, tag: model.Tag, quote: model.Quote) -> model.TagQuoteLink:
+
+def add_tag_to_quote(
+    conn: Connection, tag: model.Tag, quote: model.Quote
+) -> model.TagQuoteLink:
     response = conn.execute(
         "INSERT INTO taggedas (tid, qid) VALUES (%s, %s) RETURNING tid, qid",
-        (tag.id, quote.id)
+        (tag.id, quote.id),
     ).fetchone()
     if response is None:
         raise ValueError("Could not add tag to quote.")
