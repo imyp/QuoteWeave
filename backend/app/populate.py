@@ -3,8 +3,8 @@ import typing
 
 from psycopg.connection import Connection
 
-import app.db as db
 import app.crud as crud
+import app.db as db
 import app.model as model
 
 
@@ -35,11 +35,16 @@ def extract_samples_from_file(filename: str, n: int) -> list[Entry]:
                 collection = ",".join(author_section[1:]).strip()
             if author == "":
                 author = "Unknown"
-            entry = Entry(quote=quote, author=author, collection=collection, tags=tags)
+            entry = Entry(
+                quote=quote, author=author, collection=collection, tags=tags
+            )
             entries.append(entry)
     if len(entries) != n:
-        raise ValueError(f"Tried to extract {n} entries, only found {len(entries)}")
+        raise ValueError(
+            f"Tried to extract {n} entries, only found {len(entries)}"
+        )
     return entries
+
 
 def add_entry_to_db(conn: Connection, entry: Entry):
     print(f"Adding entry {entry}")
@@ -48,7 +53,9 @@ def add_entry_to_db(conn: Connection, entry: Entry):
         author_query = model.CreateAuthorQuery(name=entry["author"])
         author = crud.create_author(conn, author_query)
         conn.commit()
-    quote_query = model.CreateQuoteQuery(author_id=author.id, text=entry["quote"], is_public=True)
+    quote_query = model.CreateQuoteQuery(
+        author_id=author.id, text=entry["quote"], is_public=True
+    )
     quote = crud.create_quote(conn, quote_query)
     conn.commit()
     for tag_name in entry["tags"]:
@@ -66,12 +73,13 @@ def add_entry_to_db(conn: Connection, entry: Entry):
                 user_id=author.id,
                 name=entry["collection"],
                 description="",
-                is_public=True
+                is_public=True,
             )
             collection = crud.create_collection(conn, collection_query)
             conn.commit()
         crud.add_quote_to_collection(conn, quote, collection)
         conn.commit()
+
 
 def populate_if_necessary(conn: Connection, filename: str, n: int):
     """Populate database with data from file if database contains no quotes."""
@@ -79,7 +87,9 @@ def populate_if_necessary(conn: Connection, filename: str, n: int):
     if response is None:
         raise ValueError("Not able to count entries.")
     if response[0] > 0:
-        print("Quotes were found in the table so database will not be populated.")
+        print(
+            "Quotes were found in the table so database will not be populated."
+        )
         return None
     print("Extracting entries from file.")
     entries = extract_samples_from_file(filename, n)

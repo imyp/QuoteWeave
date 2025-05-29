@@ -1,54 +1,74 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS author (
-    aid integer GENERATED ALWAYS AS IDENTITY,
+    id integer GENERATED ALWAYS AS IDENTITY,
     name text NOT NULL UNIQUE,
-    PRIMARY KEY (aid)
+    PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS auser (
-    author_id integer,
+CREATE TABLE IF NOT EXISTS "user" (
+    id integer GENERATED ALWAYS AS IDENTITY,
+    author_id integer UNIQUE,
     email text NOT NULL UNIQUE,
-    pw text NOT NULL,
-    FOREIGN KEY (author_id) REFERENCES author(aid) ON DELETE CASCADE
+    password text NOT NULL,
+    FOREIGN KEY (author_id) REFERENCES author(id) ON DELETE CASCADE,
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS collection (
-    cid integer GENERATED ALWAYS AS IDENTITY,
-    aid integer NOT NULL,
+    id integer GENERATED ALWAYS AS IDENTITY,
+    author_id integer NOT NULL,
     name text NOT NULL,
     description text NOT NULL,
     is_public boolean DEFAULT false,
-    FOREIGN KEY (aid) REFERENCES author (aid) ON DELETE CASCADE,
-    UNIQUE (aid, name),
-    PRIMARY KEY (cid)
+    FOREIGN KEY (author_id) REFERENCES author (id) ON DELETE CASCADE,
+    UNIQUE (author_id, name),
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS quote (
-    qid integer GENERATED ALWAYS AS IDENTITY,
+    id integer GENERATED ALWAYS AS IDENTITY,
     author_id integer NOT NULL,
     text text NOT NULL,
     is_public boolean DEFAULT false,
-    FOREIGN KEY (author_id) REFERENCES author (aid) ON DELETE CASCADE,
-    PRIMARY KEY (qid)
+    embedding vector(384),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES author (id) ON DELETE CASCADE,
+    PRIMARY KEY (id)
 );
 
+CREATE OR REPLACE FUNCTION update_quote_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_quote_modtime
+    BEFORE UPDATE ON quote
+    FOR EACH ROW
+    EXECUTE FUNCTION update_quote_updated_at_column();
+
 CREATE TABLE IF NOT EXISTS collectioncontains (
-    cid integer NOT NULL,
-    qid integer NOT NULL,
-    FOREIGN KEY (cid) REFERENCES collection (cid) ON DELETE CASCADE,
-    FOREIGN KEY (qid) REFERENCES quote (qid) ON DELETE CASCADE,
-    PRIMARY KEY (cid, qid)
+    collection_id integer NOT NULL,
+    quote_id integer NOT NULL,
+    FOREIGN KEY (collection_id) REFERENCES collection (id) ON DELETE CASCADE,
+    FOREIGN KEY (quote_id) REFERENCES quote (id) ON DELETE CASCADE,
+    PRIMARY KEY (collection_id, quote_id)
 );
 
 CREATE TABLE IF NOT EXISTS tag (
-    tid integer GENERATED ALWAYS AS IDENTITY,
+    id integer GENERATED ALWAYS AS IDENTITY,
     name text NOT NULL UNIQUE,
-    PRIMARY KEY (tid)
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS taggedas (
-    qid integer NOT NULL,
-    tid integer NOT NULL,
-    FOREIGN KEY (qid) REFERENCES quote (qid) ON DELETE CASCADE,
-    FOREIGN KEY (tid) REFERENCES tag (tid) ON DELETE CASCADE,
-    PRIMARY KEY (qid, tid)
+    quote_id integer NOT NULL,
+    tag_id integer NOT NULL,
+    FOREIGN KEY (quote_id) REFERENCES quote (id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tag (id) ON DELETE CASCADE,
+    PRIMARY KEY (quote_id, tag_id)
 );

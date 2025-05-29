@@ -1,8 +1,9 @@
 """Database actions."""
 
+from dataclasses import dataclass
+
 import psycopg
 
-from dataclasses import dataclass
 
 @dataclass
 class DatabaseSettings:
@@ -12,13 +13,11 @@ class DatabaseSettings:
     user: str
     password: str
 
+
 settings = DatabaseSettings(
-    host="db",
-    port=5432,
-    dbname="mydb",
-    user="postgres",
-    password="admin"
+    host="db", port=5432, dbname="mydb", user="postgres", password="admin"
 )
+
 
 def get_connection():
     """Get a connection to the database."""
@@ -27,9 +26,10 @@ def get_connection():
         port=settings.port,
         dbname=settings.dbname,
         user=settings.user,
-        password=settings.password
+        password=settings.password,
     )
     return conn
+
 
 def get_connection_gen():
     with psycopg.connect(
@@ -37,6 +37,6 @@ def get_connection_gen():
         port=settings.port,
         dbname=settings.dbname,
         user=settings.user,
-        password=settings.password
+        password=settings.password,
     ) as conn:
         yield conn
