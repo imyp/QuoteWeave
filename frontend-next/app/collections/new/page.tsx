@@ -9,12 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { FolderPlus, Terminal, Loader2 } from "lucide-react"
+import { FolderPlus, Terminal, Loader2, LogIn } from "lucide-react"
 import { createCollection, CreateCollectionPayload } from '@/lib/api';
-
+import { useAuth } from '@/lib/auth';
+import Link from 'next/link';
 
 export default function NewCollectionPage() {
   const router = useRouter();
+  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPublic, setIsPublic] = useState(true);
@@ -24,6 +26,12 @@ export default function NewCollectionPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isAuthenticated || !token) {
+      setError("Please log in to create a collection.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
@@ -31,7 +39,7 @@ export default function NewCollectionPage() {
     const payload: CreateCollectionPayload = { name, description, isPublic };
 
     try {
-      const newCollection = await createCollection(payload, null);
+      const newCollection = await createCollection(payload, token);
       setSuccessMessage(`Collection "${newCollection.name}" created successfully! ID: ${newCollection.id}. Redirecting...`);
       setTimeout(() => router.push(`/collections`), 1500);
     } catch (apiError: unknown) {
@@ -45,6 +53,32 @@ export default function NewCollectionPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (authIsLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex justify-center items-center min-h-[calc(100vh-4rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading authentication...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
+        <Card className="w-full max-w-md p-8 text-center bg-card/80 backdrop-blur-sm">
+          <Terminal className="mx-auto h-10 w-10 text-destructive mb-4" />
+          <CardTitle className="text-xl font-semibold mb-2">Authentication Required</CardTitle>
+          <CardDescription className="mb-6">
+            You need to be logged in to create a new collection.
+          </CardDescription>
+          <Button asChild className="w-full">
+            <Link href="/login?redirect=/collections/new"><LogIn className="mr-2 h-4 w-4" /> Log In</Link>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-12 flex justify-center min-h-[calc(100vh-4rem)]">

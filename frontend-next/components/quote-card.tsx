@@ -80,7 +80,7 @@ export default function QuoteCard({ quote: initialQuote, onOpenModal, onQuoteUpd
     }
   };
 
-  const authorDisplayName = typeof quote.author === 'string' ? quote.author : quote.authorName || 'Unknown Author';
+  const authorDisplayName = quote.authorName || 'Unknown Author';
   const authorLinkPath = quote.authorId ? `/authors/${quote.authorId}` : '#';
 
   // Determine how many tags to show initially based on available space or preference

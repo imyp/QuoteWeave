@@ -7,91 +7,139 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { QuotePageEntry, getQuotePage, PaginatedQuotesResponse, favoriteQuote, unfavoriteQuote } from "@/lib/quote-utils";
-import { getAuthorDetails, AuthorDetailsResponse, CollectionEntry } from "@/lib/api";
+import { QuotePageEntry, getQuotePage, PaginatedQuotesResponse } from "@/lib/quote-utils";
+import { getAuthorDetails, AuthorDetailsResponse, CollectionEntry, favoriteQuote, unfavoriteQuote } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Loader2, UserCircle2, BookOpenText, Terminal, ArrowLeft, Heart, TagsIcon } from "lucide-react";
-import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import QuoteDetailModal from "@/components/quote-detail-modal";
 
 interface AuthorQuoteCardProps {
   quote: QuotePageEntry;
   onOpenModal: () => void;
   onQuoteUpdate: (updatedQuote: QuotePageEntry) => void;
+  token: string | null;
+  isAuthenticated: boolean;
+  authIsLoading: boolean;
 }
 
-function AuthorQuoteCard({ quote, onOpenModal, onQuoteUpdate }: AuthorQuoteCardProps) {
+function AuthorQuoteCard({ quote: initialQuote, onOpenModal, onQuoteUpdate, token, isAuthenticated, authIsLoading }: AuthorQuoteCardProps) {
+  const [quote, setQuote] = useState<QuotePageEntry>(initialQuote);
   const [isFavoriting, setIsFavoriting] = useState(false);
   const [animateHeart, setAnimateHeart] = useState(false);
 
+  useEffect(() => {
+    setQuote(prevQuote => {
+      const baseState = { ...initialQuote };
+      // If not authenticated and quote was marked as favorited (e.g. from SSR or stale cache), mark as not favorited
+      const updatedQuote = !isAuthenticated && baseState.isFavorited === true
+        ? { ...baseState, isFavorited: false, favoriteCount: Math.max(0, (baseState.favoriteCount || 0) - 1) } // Adjust count too if un-favoriting
+        : baseState;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return prevQuote.id === updatedQuote.id ? { ...updatedQuote, _animateHeart: (prevQuote as any)._animateHeart } : updatedQuote;
+    });
+  }, [initialQuote, isAuthenticated]);
+
   const handleFavoriteToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (authIsLoading) return;
+
+    if (!isAuthenticated || !token) {
+      // Consider using toast here if available and configured
+      console.log("Please log in to favorite quotes."); // Or use toast.info
+      return;
+    }
+
     setIsFavoriting(true);
     setAnimateHeart(true);
-    setTimeout(() => setAnimateHeart(false), 400);
+
+    const originalQuoteState = { ...quote };
+    const newFavoriteStatus = !quote.isFavorited;
+    const newFavoriteCount = newFavoriteStatus
+      ? (quote.favoriteCount || 0) + 1
+      : Math.max(0, (quote.favoriteCount || 0) - 1);
+
+    // Optimistic update
+    const optimisticallyUpdatedQuote = {
+      ...quote,
+      isFavorited: newFavoriteStatus,
+      favoriteCount: newFavoriteCount,
+    };
+    setQuote(optimisticallyUpdatedQuote);
+    onQuoteUpdate(optimisticallyUpdatedQuote); // Notify parent for its state
+
     try {
-      const apiCall = quote.isFavorited ? unfavoriteQuote : favoriteQuote;
-      const result = await apiCall(quote.id);
-      if (result.success && result.data) {
-        onQuoteUpdate(result.data);
+      if (newFavoriteStatus) {
+        await favoriteQuote(quote.id, token);
+        // toast.success("Favorited!"); // If toast is available
+      } else {
+        await unfavoriteQuote(quote.id, token);
+        // toast.success("Unfavorited."); // If toast is available
       }
+      // No need to call onQuoteUpdate again if API call is successful, optimistic update is enough
+      // unless API returns slightly different data we need to sync. For now, assume optimistic is fine.
     } catch (error) {
       console.error("Failed to update favorite status on author page card", error);
+      // Revert optimistic update on error
+      setQuote(originalQuoteState);
+      onQuoteUpdate(originalQuoteState);
+      // toast.error("Failed to update favorite."); // If toast is available
     } finally {
       setIsFavoriting(false);
+      setTimeout(() => setAnimateHeart(false), 400);
     }
   };
 
   return (
-    <DialogTrigger asChild>
-      <Card
-        onClick={onOpenModal}
-        className="bg-card/70 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-200 ease-in-out cursor-pointer group flex flex-col h-full border border-transparent hover:border-primary/30"
-      >
-        <CardContent className="p-4 flex-grow overflow-y-auto">
-          <blockquote className="text-md text-foreground italic group-hover:text-primary transition-colors mb-3 leading-relaxed line-clamp-4">
-            &ldquo;{quote.text}&rdquo;
-          </blockquote>
-        </CardContent>
-        <CardFooter className="text-xs text-muted-foreground pt-3 px-4 pb-3 border-t border-border/50 mt-auto flex justify-between items-center">
-            <div className="flex items-center gap-1.5 flex-shrink min-w-0">
-                <TagsIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                {quote.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 overflow-hidden">
-                    {quote.tags.slice(0, 2).map(tag => (
-                        <Badge key={tag} variant="secondary" className="px-1.5 py-0.5 text-xs font-normal group-hover:bg-primary/20 truncate">
-                            {tag}
-                        </Badge>
-                    ))}
-                    {quote.tags.length > 2 && (
-                        <Badge variant="outline" className="px-1.5 py-0.5 text-xs font-normal">+{quote.tags.length - 2}</Badge>
-                    )}
-                    </div>
-                ) : (
-                    <span className="text-xxs italic">No tags</span>
-                )}
+    <Card
+      onClick={onOpenModal}
+      className="bg-card/70 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-200 ease-in-out cursor-pointer group flex flex-col h-full border border-transparent hover:border-primary/30"
+    >
+      <CardContent className="p-4 flex-grow overflow-y-auto">
+        <blockquote className="text-md text-foreground italic group-hover:text-primary transition-colors mb-3 leading-relaxed line-clamp-4">
+          &ldquo;{quote.text}&rdquo;
+        </blockquote>
+      </CardContent>
+      <CardFooter className="text-xs text-muted-foreground pt-3 px-4 pb-3 border-t border-border/50 mt-auto flex justify-between items-center">
+        <div className="flex items-center gap-1.5 flex-shrink min-w-0">
+          <TagsIcon className="h-3.5 w-3.5 flex-shrink-0" />
+          {quote.tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1 overflow-hidden">
+              {quote.tags.slice(0, 2).map(tag => (
+                <Badge key={tag} variant="secondary" className="px-1.5 py-0.5 text-xs font-normal group-hover:bg-primary/20 truncate">
+                  {tag}
+                </Badge>
+              ))}
+              {quote.tags.length > 2 && (
+                <Badge variant="outline" className="px-1.5 py-0.5 text-xs font-normal">+{quote.tags.length - 2}</Badge>
+              )}
             </div>
-            <div className="flex items-center flex-shrink-0 ml-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-7 w-7 group/fav ${quote.isFavorited ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-red-500'}`}
-                    onClick={handleFavoriteToggle}
-                    disabled={isFavoriting}
-                >
-                    <Heart className={`h-4 w-4 ${quote.isFavorited ? 'fill-current' : 'group-hover/fav:fill-red-500/30'} ${animateHeart ? 'animate-pulse-heart' : ''} transition-all`} />
-                    <span className="sr-only">Favorite</span>
-                </Button>
-                <span className="text-xs min-w-[18px] text-right tabular-nums ml-1">{quote.favoriteCount || 0}</span>
-            </div>
-        </CardFooter>
-      </Card>
-    </DialogTrigger>
+          ) : (
+            <span className="text-xxs italic">No tags</span>
+          )}
+        </div>
+        <div className="flex items-center flex-shrink-0 ml-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 group/fav ${quote.isFavorited ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-red-500'}`}
+            onClick={handleFavoriteToggle}
+            disabled={isFavoriting || authIsLoading || !isAuthenticated}
+          >
+            {isFavoriting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className={`h-4 w-4 ${quote.isFavorited ? 'fill-current' : 'group-hover/fav:fill-red-500/30'} ${animateHeart ? 'animate-pulse-heart' : ''} transition-all`} />}
+            <span className="sr-only">Favorite</span>
+          </Button>
+          <span className="text-xs min-w-[18px] text-right tabular-nums ml-1">{quote.favoriteCount || 0}</span>
+        </div>
+      </CardFooter>
+    </Card>
   );
 }
 
 export default function AuthorPage() {
   const params = useParams();
   const router = useRouter();
+  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
   const authorId = params.authorId as string;
 
   const [authorDetails, setAuthorDetails] = useState<AuthorDetailsResponse | null>(null);
@@ -99,20 +147,20 @@ export default function AuthorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<QuotePageEntry | null>(null);
-  const [currentPage, ] = useState(1);
+  const [currentPage,] = useState(1);
   const QUOTES_PER_PAGE = 6;
   const numericAuthorId = parseInt(authorId, 10);
 
   const handleQuoteUpdateOnPage = (updatedQuote: QuotePageEntry) => {
     setAuthorQuotesData(prevData => {
-        if (!prevData) return null;
-        return {
-            ...prevData,
-            quotes: prevData.quotes.map(q => q.id === updatedQuote.id ? updatedQuote : q),
-        };
+      if (!prevData) return null;
+      return {
+        ...prevData,
+        quotes: prevData.quotes.map(q => q.id === updatedQuote.id ? updatedQuote : q),
+      };
     });
     if (selectedQuote && selectedQuote.id === updatedQuote.id) {
-        setSelectedQuote(updatedQuote);
+      setSelectedQuote(updatedQuote);
     }
   };
 
@@ -127,9 +175,9 @@ export default function AuthorPage() {
       return;
     }
     if (isNaN(numericAuthorId)) {
-        setError("Invalid Author ID format.");
-        setIsLoading(false);
-        return;
+      setError("Invalid Author ID format.");
+      setIsLoading(false);
+      return;
     }
 
     setIsLoading(true);
@@ -139,21 +187,21 @@ export default function AuthorPage() {
       getAuthorDetails(numericAuthorId),
       getQuotePage(currentPage, QUOTES_PER_PAGE, { authorId: numericAuthorId })
     ])
-    .then(([details, quotesResponse]) => {
-      if (!details) {
-        setError("Author not found.");
-      } else {
-        setAuthorDetails(details);
-      }
-      setAuthorQuotesData(quotesResponse);
-    })
-    .catch(err => {
-      console.error("Error fetching author page data:", err);
-      setError(err.message || "Failed to load author information and quotes.");
-    })
-    .finally(() => {
-      setIsLoading(false);
-    });
+      .then(([details, quotesResponse]) => {
+        if (!details) {
+          setError("Author not found.");
+        } else {
+          setAuthorDetails(details);
+        }
+        setAuthorQuotesData(quotesResponse);
+      })
+      .catch(err => {
+        console.error("Error fetching author page data:", err);
+        setError(err.message || "Failed to load author information and quotes.");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [authorId, currentPage, router, numericAuthorId]);
 
   if (isLoading) {
@@ -182,9 +230,9 @@ export default function AuthorPage() {
     return (
       <div className="container mx-auto py-8 px-4 md:px-6 text-center min-h-[calc(100vh-8rem)]">
         <Alert className="max-w-md mx-auto">
-            <UserCircle2 className="h-4 w-4"/>
-            <AlertTitle>Author Not Found</AlertTitle>
-            <AlertDescription>The author you are looking for does not exist or could not be loaded.</AlertDescription>
+          <UserCircle2 className="h-4 w-4" />
+          <AlertTitle>Author Not Found</AlertTitle>
+          <AlertDescription>The author you are looking for does not exist or could not be loaded.</AlertDescription>
         </Alert>
         <Button onClick={() => router.push('/quotes')} className="mt-6">Browse All Quotes</Button>
       </div>
@@ -205,18 +253,18 @@ export default function AuthorPage() {
             <CardTitle className="text-4xl font-bold text-foreground">{authorDetails.name}</CardTitle>
           </CardHeader>
           {authorQuotesData && authorDetails && authorDetails.quotes && (
-             <CardFooter className="flex justify-center text-sm text-muted-foreground pb-4 pt-2 border-t border-border/30">
-                Displaying {authorQuotesData.quotes.length} of {authorDetails.quotes.length} quotes by this author.
+            <CardFooter className="flex justify-center text-sm text-muted-foreground pb-4 pt-2 border-t border-border/30">
+              Displaying {authorQuotesData.quotes.length} of {authorDetails.quotes.length} quotes by this author.
             </CardFooter>
           )}
         </Card>
 
         {error && authorDetails && (
-            <Alert variant="destructive" className="my-6">
-                <Terminal className="h-4 w-4" />
-                <AlertTitle>Error Loading Quotes</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-            </Alert>
+          <Alert variant="destructive" className="my-6">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Error Loading Quotes</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <div className="mb-10">
@@ -227,18 +275,21 @@ export default function AuthorPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {authorQuotesData.quotes.map((quote: QuotePageEntry) => (
                 <AuthorQuoteCard
-                    key={quote.id}
-                    quote={quote}
-                    onOpenModal={() => handleOpenModal(quote)}
-                    onQuoteUpdate={handleQuoteUpdateOnPage}
+                  key={quote.id}
+                  quote={quote}
+                  onOpenModal={() => handleOpenModal(quote)}
+                  onQuoteUpdate={handleQuoteUpdateOnPage}
+                  token={token}
+                  isAuthenticated={isAuthenticated}
+                  authIsLoading={authIsLoading}
                 />
               ))}
             </div>
           ) : (
             !isLoading && !error && (
-                <p className="text-muted-foreground italic">
-                    No quotes found for {authorDetails.name} on this page.
-                </p>
+              <p className="text-muted-foreground italic">
+                No quotes found for {authorDetails.name} on this page.
+              </p>
             )
           )}
         </div>
@@ -262,25 +313,25 @@ export default function AuthorPage() {
                   <Card key={collection.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
                     <CardHeader className="pb-2 pt-4">
                       <Link href={`/collections/${collection.id}`} passHref>
-                          <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
-                              {collection.name}
-                          </CardTitle>
+                        <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
+                          {collection.name}
+                        </CardTitle>
                       </Link>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground flex-grow">
                       {collection.description && (
-                          <p className="line-clamp-2 mb-2">
-                              {collection.description}
-                          </p>
+                        <p className="line-clamp-2 mb-2">
+                          {collection.description}
+                        </p>
                       )}
-                       <Badge variant={collection.isPublic ? "default" : "secondary"} className="capitalize text-xs">
-                          {collection.isPublic ? "Public" : "Private"}
+                      <Badge variant={collection.isPublic ? "default" : "secondary"} className="capitalize text-xs">
+                        {collection.isPublic ? "Public" : "Private"}
                       </Badge>
                     </CardContent>
                     <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
                       <span>{collection.quoteCount} {collection.quoteCount === 1 ? "quote" : "quotes"}</span>
                       <Link href={`/collections/${collection.id}`} passHref>
-                          <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
+                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
                       </Link>
                     </CardFooter>
                   </Card>
@@ -295,7 +346,6 @@ export default function AuthorPage() {
         <QuoteDetailModal
           quote={{
             ...selectedQuote,
-            author: selectedQuote.authorName,
           }}
           onQuoteUpdate={(updatedApiQuote) => {
             const { /* author, */ ...restOfQuote } = updatedApiQuote;

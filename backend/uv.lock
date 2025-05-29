@@ -66,6 +66,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "pytest" },
+    { name = "python-dotenv" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "torch", version = "2.7.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
@@ -85,9 +86,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.4" },
     { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "pytest", specifier = ">=8.3.5" },
+    { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "ruff", specifier = ">=0.11.11" },
     { name = "scikit-learn", specifier = ">=1.0.0" },
-    { name = "torch", extras = ["cpu"], index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers" },
 ]
 

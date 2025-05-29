@@ -31,6 +31,7 @@ export default function Navbar() {
                 <Link href="/quotes" className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-accent transition-colors ">Quotes</Link>
                 <Link href="/collections" className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-accent transition-colors">Collections</Link>
                 <Link href="/tags" className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-accent transition-colors">Tags</Link>
+                <Link href="/authors" className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-accent transition-colors">Authors</Link>
                 <Link href="/search" className="flex items-center text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-accent transition-colors">
                   Search
                 </Link>

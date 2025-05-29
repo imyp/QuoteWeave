@@ -30,6 +30,9 @@ settings = DatabaseSettings(
     ),  # Defaulting to compose.yaml value
 )
 
+# Debugging
+# print(f"DEBUG: Database settings: {settings}")
+
 
 def get_connection():
     """Get a connection to the database."""

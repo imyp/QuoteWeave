@@ -191,7 +191,6 @@ export default function UserProfileQuotesPage() {
           const mappedQuotes = quotesResponse.quotes.map((bq: BackendQuote): QuotePageEntry => ({
             id: bq.id,
             text: bq.text,
-            author: profileData.username,
             authorName: profileData.username,
             authorId: bq.author_id,
             tags: bq.tags ? bq.tags.map((t: BackendTag) => t.name) : [],
@@ -347,20 +346,25 @@ export default function UserProfileQuotesPage() {
         {selectedQuoteModal && (
           <QuoteDetailModal
             quote={{
-              ...selectedQuoteModal,
-              author: selectedQuoteModal.authorName || selectedQuoteModal.author || '',
-            }}
+              id: selectedQuoteModal.id,
+              text: selectedQuoteModal.text,
+              authorName: selectedQuoteModal.authorName,
+              authorId: selectedQuoteModal.authorId,
+              tags: selectedQuoteModal.tags,
+              isFavorited: selectedQuoteModal.isFavorited,
+              favoriteCount: selectedQuoteModal.favoriteCount,
+            } as QuotePageEntry}
             onQuoteUpdate={(updatedApiQuote: QuotePageEntry) => {
-              handleQuoteUpdateOnPage({
-                ...selectedQuoteModal,
-                ...updatedApiQuote,
-                author: updatedApiQuote.author || selectedQuoteModal?.author || 'Unknown',
-                authorName: updatedApiQuote.authorName || selectedQuoteModal?.authorName,
-                authorId: updatedApiQuote.authorId || selectedQuoteModal?.authorId,
-                tags: updatedApiQuote.tags || selectedQuoteModal?.tags || [],
-                isFavorited: updatedApiQuote.isFavorited !== undefined ? updatedApiQuote.isFavorited : selectedQuoteModal?.isFavorited,
-                favoriteCount: updatedApiQuote.favoriteCount !== undefined ? updatedApiQuote.favoriteCount : selectedQuoteModal?.favoriteCount,
-              });
+              const quoteForUpdate: QuotePageEntry = {
+                id: updatedApiQuote.id !== undefined ? updatedApiQuote.id : selectedQuoteModal.id,
+                text: updatedApiQuote.text !== undefined ? updatedApiQuote.text : selectedQuoteModal.text,
+                authorName: updatedApiQuote.authorName !== undefined ? updatedApiQuote.authorName : selectedQuoteModal.authorName,
+                authorId: updatedApiQuote.authorId !== undefined ? updatedApiQuote.authorId : selectedQuoteModal.authorId,
+                tags: updatedApiQuote.tags !== undefined ? updatedApiQuote.tags : selectedQuoteModal.tags || [],
+                isFavorited: updatedApiQuote.isFavorited !== undefined ? updatedApiQuote.isFavorited : selectedQuoteModal.isFavorited,
+                favoriteCount: updatedApiQuote.favoriteCount !== undefined ? updatedApiQuote.favoriteCount : selectedQuoteModal.favoriteCount,
+              };
+              handleQuoteUpdateOnPage(quoteForUpdate);
             }}
           />
         )}

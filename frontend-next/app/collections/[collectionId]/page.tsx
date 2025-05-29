@@ -75,7 +75,7 @@ function CollectionQuoteCard({ quote, onOpenModal, onQuoteUpdate, authToken, isA
         <CardHeader className="pb-2 pt-4">
           <div className="flex items-center text-muted-foreground group-hover:text-primary transition-colors w-full">
             <UserCircle className="h-4 w-4 mr-1.5" />
-            <span className="truncate text-sm" title={quote.authorName || quote.author}>{quote.authorName || quote.author}</span>
+            <span className="truncate text-sm" title={quote.authorName || 'Unknown Author'}>{quote.authorName || 'Unknown Author'}</span>
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-1 flex-grow">
@@ -155,13 +155,14 @@ export default function CollectionDetailsPage() {
     }
 
     if (authIsLoading) {
-        setIsLoading(true);
-        return;
+      setIsLoading(true);
+      return;
     }
 
     setIsLoading(true);
     setError(null);
 
+    console.log('[CollectionDetailsPage] useEffect - authIsLoading:', authIsLoading, 'isAuthenticated:', isAuthenticated, 'authToken:', authToken ? 'present' : authToken); // DEBUG
     getCollectionById(numericCollectionId, authToken)
       .then(data => {
         if (!data) {
@@ -175,7 +176,7 @@ export default function CollectionDetailsPage() {
         console.error(`Failed to load collection ${numericCollectionId}:`, err);
         setError((err instanceof Error ? err.message : String(err)) || "Failed to load collection details.");
         if (err instanceof Error && (err.message.includes("404") || err.message.toLowerCase().includes("not found"))) {
-            notFound();
+          notFound();
         }
       })
       .finally(() => setIsLoading(false));
@@ -219,9 +220,9 @@ export default function CollectionDetailsPage() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
             </Button>
             {!isAuthenticated && error.toLowerCase().includes("permission") && (
-                 <Button onClick={() => router.push('/login')}>
-                    <LogIn className="mr-2 h-4 w-4" /> Login to View
-                </Button>
+              <Button onClick={() => router.push('/login')}>
+                <LogIn className="mr-2 h-4 w-4" /> Login to View
+              </Button>
             )}
           </div>
         </Alert>
@@ -284,7 +285,7 @@ export default function CollectionDetailsPage() {
           <div className="mt-6 text-sm text-muted-foreground flex items-center justify-center gap-x-4 gap-y-1 flex-wrap">
             <span>
               <QuoteIcon className="inline-block h-4 w-4 mr-1.5 align-middle" />
-              {collection.quotes?.length || 0} { (collection.quotes?.length || 0) === 1 ? "Quote" : "Quotes"}
+              {collection.quotes?.length || 0} {(collection.quotes?.length || 0) === 1 ? "Quote" : "Quotes"}
             </span>
             {collection.createdAt && (
               <span>Created: {new Date(collection.createdAt).toLocaleDateString()}</span>

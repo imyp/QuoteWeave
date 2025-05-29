@@ -1,3 +1,4 @@
+import json
 import math
 from typing import List, Optional, Tuple
 
@@ -70,7 +71,7 @@ def create_user(
 
         hashed_password = security.hash_password(query.password)
         cur.execute(
-            'INSERT INTO "user" (author_id, email, password) VALUES (%s, %s, %s) RETURNING id',
+            'INSERT INTO "user" (author_id, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
             (author.id, query.email, hashed_password),
         )
         user_id_row = cur.fetchone()
@@ -87,7 +88,7 @@ def create_user(
 def get_user_by_name(conn: Connection, name: str) -> model.User | None:
     with conn.cursor() as cur:
         cur.execute(
-            'SELECT u.id as user_id, u.author_id, u.email, u.password, a.name as username FROM "user" u '
+            'SELECT u.id as user_id, u.author_id, u.email, u.password_hash, a.name as username FROM "user" u '
             "JOIN author a ON u.author_id = a.id WHERE a.name = %s",
             (name,),
         )
@@ -98,36 +99,43 @@ def get_user_by_name(conn: Connection, name: str) -> model.User | None:
             id=response[0],
             author_id=response[1],
             email=response[2],
-            password=response[3],
+            password_hash=response[3],
             username=response[4],
         )
 
 
 def get_user_by_email(conn: Connection, email: str) -> model.User | None:
     response = conn.execute(
-        "SELECT auser.author_id, author.name, auser.pw FROM auser "
-        "JOIN author ON auser.author_id = author.aid WHERE auser.email = %s",
+        'SELECT "user".id, author.name, "user".email, "user".password_hash FROM "user" '
+        'JOIN author ON "user".author_id = author.id WHERE "user".email = %s',
         (email,),
     ).fetchone()
     if response is None:
         return None
-    user_id, username, password = response
+    user_id, username, email_from_db, password_hash_val = response
     return model.User(
-        id=user_id, username=username, email=email, password=password
+        id=user_id,
+        username=username,
+        email=email_from_db,
+        password_hash=password_hash_val,
     )
 
 
 def get_user_by_id(conn: Connection, user_id: int) -> model.User | None:
     response = conn.execute(
-        "SELECT auser.author_id, author.name, auser.email, auser.pw FROM auser "
-        "JOIN author ON auser.author_id = author.aid WHERE auser.author_id = %s",
+        'SELECT "user".id, author.name, "user".email, "user".password_hash FROM "user" '
+        'JOIN author ON "user".author_id = author.id WHERE "user".id = %s',
         (user_id,),
     ).fetchone()
     if response is None:
         return None
-    user_id, username, email, password = response
+    user_id_from_db, username, email_from_db, password_hash_val = response
+    # Ensure we are using the correct user_id that was queried for, not potentially author_id if columns were mixed up
     return model.User(
-        id=user_id, username=username, email=email, password=password
+        id=user_id_from_db,
+        username=username,
+        email=email_from_db,
+        password_hash=password_hash_val,
     )
 
 
@@ -137,18 +145,20 @@ def update_user_password(
     # First, verify the current password
     user = get_user_by_id(
         conn, user_id
-    )  # Assumes get_user_by_id returns a model.User with a password field
-    if not user or not user.password:
+    )  # Assumes get_user_by_id returns a model.User with a password_hash field
+    if not user or not user.password_hash:
         raise ValueError("User not found or password not set.")
 
-    if not security.check_password(payload.current_password, user.password):
+    if not security.check_password(
+        payload.current_password, user.password_hash
+    ):
         raise ValueError("Incorrect current password.")
 
     new_hashed_password = security.hash_password(payload.new_password)
 
     with conn.cursor() as cur:
         cur.execute(
-            'UPDATE "user" SET password = %s WHERE id = %s',
+            'UPDATE "user" SET password_hash = %s WHERE id = %s',
             (new_hashed_password, user_id),
         )
         conn.commit()
@@ -354,12 +364,23 @@ def create_quote_with_client_payload(
 def _map_row_to_quote(
     row: Tuple, fetched_tags: List[model.Tag]
 ) -> model.Quote:
+    embedding_value = row[4]
+    if isinstance(embedding_value, str):
+        try:
+            embedding_value = json.loads(embedding_value)
+        except json.JSONDecodeError:
+            # Handle cases where embedding is not a valid JSON string or is already None/empty
+            embedding_value = None
+    elif not isinstance(embedding_value, list):
+        # If it's not a string and not a list, set to None (or handle as error)
+        embedding_value = None
+
     return model.Quote(
         id=row[0],
         author_id=row[1],
         text=row[2],
         is_public=row[3],
-        embedding=row[4] if row[4] else None,
+        embedding=embedding_value,
         created_at=row[5],
         updated_at=row[6],
         tags=fetched_tags,
@@ -440,9 +461,9 @@ def get_quote_details_for_page_entry(
                 a.name AS author_name,
                 COALESCE(fc.favorite_count, 0) as favorite_count,
                 CASE
-                    WHEN %(user_id)s IS NOT NULL THEN EXISTS (
-                        SELECT 1 FROM favorite f
-                        WHERE f.quote_id = q.id AND f.user_id = %(user_id)s
+                    WHEN CAST(%(user_id)s AS INTEGER) IS NOT NULL THEN EXISTS (
+                        SELECT 1 FROM user_quote_favorite f
+                        WHERE f.quote_id = q.id AND f.user_id = CAST(%(user_id)s AS INTEGER)
                     )
                     ELSE FALSE
                 END as is_favorited,
@@ -454,7 +475,7 @@ def get_quote_details_for_page_entry(
             JOIN author a ON q.author_id = a.id
             LEFT JOIN (
                 SELECT quote_id, COUNT(*) as favorite_count
-                FROM favorite
+                FROM user_quote_favorite
                 GROUP BY quote_id
             ) AS fc ON q.id = fc.quote_id
             WHERE q.id = %(quote_id)s;
@@ -481,21 +502,30 @@ def get_quotes_for_page(
     page_size: int,
     page_number: int,
     current_user_id: Optional[int] = None,
+    author_id: Optional[int] = None,
 ) -> List[model.QuotePageEntry]:
     offset = (page_number - 1) * page_size
     page_entries = []
+    params = [page_size, offset]
+
+    base_query = """
+        SELECT q.id, q.text, a.name as author_name, a.id as author_id
+        FROM quote q
+        JOIN author a ON q.author_id = a.id
+    """
+
+    where_clauses = ["q.is_public = TRUE"]
+    if author_id is not None:
+        where_clauses.append("q.author_id = %s")
+        params.insert(0, author_id)
+
+    if where_clauses:
+        base_query += " WHERE " + " AND ".join(where_clauses)
+
+    base_query += " ORDER BY q.created_at DESC LIMIT %s OFFSET %s"
+
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT q.id, q.text, a.name as author_name, a.id as author_id
-            FROM quote q
-            JOIN author a ON q.author_id = a.id
-            WHERE q.is_public = TRUE
-            ORDER BY q.created_at DESC
-            LIMIT %s OFFSET %s
-            """,
-            (page_size, offset),
-        )
+        cur.execute(base_query, tuple(params))
         quotes_data = cur.fetchall()
 
     for row in quotes_data:
@@ -525,12 +555,25 @@ def get_quotes_for_page(
     return page_entries
 
 
-def get_quotes_total_pages(conn: Connection, page_size: int) -> int:
+def get_quotes_total_pages(
+    conn: Connection, page_size: int, author_id: Optional[int] = None
+) -> int:
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM quote;")
+        base_query = "SELECT COUNT(*) FROM quote q"
+        params = []
+
+        where_clauses = ["q.is_public = TRUE"]
+        if author_id is not None:
+            where_clauses.append("q.author_id = %s")
+            params.append(author_id)
+
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+
+        cur.execute(base_query, tuple(params))
         response = cur.fetchone()
         if response is None or response[0] is None:
-            raise ValueError("Could not count rows in table quote.")
+            return 0
         n = response[0]
         return math.ceil(n / page_size)
 
@@ -559,7 +602,7 @@ def create_collection(
 
 
 def get_collection_by_id(
-    conn: Connection, collection_id: int
+    conn: Connection, collection_id: int, current_user_id: Optional[int] = None
 ) -> model.Collection | None:
     with conn.cursor() as cur:
         cur.execute(
@@ -579,6 +622,11 @@ def get_collection_by_id(
         quote_count_row = cur.fetchone()
         quote_count = quote_count_row[0] if quote_count_row else 0
 
+        # Fetch the actual quotes for the collection
+        quotes_in_collection = get_quote_page_entries_for_collection(
+            conn, collection_id, current_user_id
+        )
+
         return model.Collection(
             id=row[0],
             author_id=row[1],
@@ -589,6 +637,7 @@ def get_collection_by_id(
             created_at=row[6],
             updated_at=row[7],
             quote_count=quote_count,
+            quotes=quotes_in_collection,  # Populate the quotes field
         )
 
 
@@ -616,7 +665,7 @@ def add_quote_to_collection(
     with conn.cursor() as cur:
         try:
             cur.execute(
-                "INSERT INTO collectioncontains (quote_id, collection_id) VALUES (%s, %s) RETURNING quote_id, collection_id",
+                "INSERT INTO collectioncontains (quote_id, collection_id, added_at) VALUES (%s, %s, NOW()) RETURNING quote_id, collection_id, added_at",
                 (quote_id, collection_id),
             )
             response = cur.fetchone()
@@ -626,7 +675,9 @@ def add_quote_to_collection(
                 )
             conn.commit()
             return model.CollectionQuoteLink(
-                quote_id=response[0], collection_id=response[1]
+                quote_id=response[0],
+                collection_id=response[1],
+                added_at=response[2],
             )
         except Exception as e:
             conn.rollback()
@@ -644,7 +695,7 @@ def get_collections_from_author(
     collections = []
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT c.id, c.author_id, a.name as author_name, c.name, c.description, c.is_public, c.created_at, c.updated_at "
+            "SELECT c.id, c.author_id, a.name as author_name, c.name, c.description, c.is_public "
             "FROM collection c JOIN author a ON c.author_id = a.id "
             "WHERE c.author_id = %s ORDER BY c.name",
             (author_id,),
@@ -666,8 +717,6 @@ def get_collections_from_author(
                     name=row[3],
                     description=row[4],
                     is_public=row[5],
-                    created_at=row[6],
-                    updated_at=row[7],
                     quote_count=quote_count,
                 )
             )
@@ -676,7 +725,7 @@ def get_collections_from_author(
 
 def create_tag(conn: Connection, query: model.CreateTagQuery) -> model.Tag:
     response = conn.execute(
-        "INSERT INTO tag (name) VALUES (%s) RETURNING tid", (query.name,)
+        "INSERT INTO tag (name) VALUES (%s) RETURNING id", (query.name,)
     ).fetchone()
     if response is None:
         raise ValueError(f"Could not create tag with name {query.name}")
@@ -685,7 +734,7 @@ def create_tag(conn: Connection, query: model.CreateTagQuery) -> model.Tag:
 
 def get_tag_by_id(conn: Connection, tag_id: int) -> model.Tag | None:
     response = conn.execute(
-        "SELECT name FROM tag WHERE tid = %s", (tag_id,)
+        "SELECT name FROM tag WHERE id = %s", (tag_id,)
     ).fetchone()
     if response is None:
         return None
@@ -694,7 +743,7 @@ def get_tag_by_id(conn: Connection, tag_id: int) -> model.Tag | None:
 
 def get_tag_by_name(conn: Connection, tag_name: str) -> model.Tag | None:
     response = conn.execute(
-        "SELECT tid, name FROM tag WHERE name = %s", (tag_name,)
+        "SELECT id, name FROM tag WHERE name = %s", (tag_name,)
     ).fetchone()
     if response is None:
         return None
@@ -737,6 +786,41 @@ def get_all_unique_tags_with_counts(conn: Connection) -> List[model.TagEntry]:
         return [
             model.TagEntry(name=row[0], quoteCount=row[1]) for row in tags_data
         ]
+
+
+def search_tags_by_name(
+    conn: Connection, search_term: str, limit: int = 20, skip: int = 0
+) -> List[model.TagEntry]:
+    """
+    Searches for tags by name (case-insensitive, partial match) and returns them
+    with their quote counts.
+    """
+    tag_entries = []
+
+    if not search_term.strip():
+        return []
+
+    search_query_param = f"%{search_term.lower()}%"
+    params = [search_query_param, limit, skip]
+
+    # Corrected triple-quoted string
+    sql_query = """
+        SELECT
+            t.name,
+            COUNT(ta.quote_id) as quote_count
+        FROM tag t
+        LEFT JOIN taggedas ta ON t.id = ta.tag_id
+        WHERE LOWER(t.name) LIKE %s
+        GROUP BY t.id, t.name
+        ORDER BY quote_count DESC, t.name ASC
+        LIMIT %s OFFSET %s;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql_query, tuple(params))
+        for row in cur.fetchall():
+            tag_entries.append(model.TagEntry(name=row[0], quoteCount=row[1]))
+    return tag_entries
 
 
 def link_quote_to_tag(conn: Connection, quote_id: int, tag_id: int) -> None:
@@ -870,27 +954,48 @@ def get_quote_favorite_count(conn: Connection, quote_id: int) -> int:
 def search_collections(
     conn: Connection, search_term: str, limit: int = 10, skip: int = 0
 ) -> List[model.CollectionEntry]:
-    search_query = f"%{search_term.lower()}%"
     collection_entries = []
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                c.id,
-                c.name,
-                c.description,
-                c.author_id,
-                a.name AS author_name,
-                c.is_public,
-                (SELECT COUNT(*) FROM collectioncontains cc WHERE cc.collection_id = c.id) AS quote_count
-            FROM collection c
-            JOIN author a ON c.author_id = a.id
-            WHERE (LOWER(c.name) LIKE %s OR LOWER(c.description) LIKE %s)
-            ORDER BY c.name
-            LIMIT %s OFFSET %s
-            """,
-            (search_query, search_query, limit, skip),
+    params = []
+
+    base_query = """
+        SELECT
+            c.id,
+            c.name,
+            c.description,
+            c.author_id,
+            a.name AS author_name,
+            c.is_public,
+            (SELECT COUNT(*) FROM collectioncontains cc WHERE cc.collection_id = c.id) AS quote_count
+        FROM collection c
+        JOIN author a ON c.author_id = a.id
+    """
+
+    where_clauses = []
+
+    if search_term.strip():
+        search_query_param = f"%{search_term.lower()}%"
+        where_clauses.append(
+            "(LOWER(c.name) LIKE %s OR LOWER(c.description) LIKE %s)"
         )
+        params.extend([search_query_param, search_query_param])
+        # When searching, we still only want public collections unless a specific design implies otherwise.
+        # For now, matching existing behavior for non-empty search and adding public for empty.
+        # If search should include non-public, this logic would need adjustment or a new param.
+        where_clauses.append(
+            "c.is_public = TRUE"
+        )  # Assuming search also implies public
+    else:
+        # If search term is empty, fetch all public collections
+        where_clauses.append("c.is_public = TRUE")
+
+    if where_clauses:
+        base_query += " WHERE " + " AND ".join(where_clauses)
+
+    base_query += " ORDER BY c.name LIMIT %s OFFSET %s"
+    params.extend([limit, skip])
+
+    with conn.cursor() as cur:
+        cur.execute(base_query, tuple(params))
 
         for row in cur.fetchall():
             collection_entries.append(
@@ -1186,7 +1291,7 @@ def delete_quote_for_user(
             {"quote_id": quote_id},
         )
         cur.execute(
-            "DELETE FROM favorite WHERE quote_id = %(quote_id)s",
+            "DELETE FROM user_quote_favorite WHERE quote_id = %(quote_id)s",
             {"quote_id": quote_id},
         )
         cur.execute(
@@ -1200,3 +1305,106 @@ def delete_quote_for_user(
 
         conn.commit()
         return cur.rowcount > 0
+
+
+def get_authors_paginated(
+    conn: Connection, search_term: Optional[str], limit: int, skip: int
+) -> model.PaginatedAuthorsResponse:
+    with conn.cursor() as cur:
+        query_conditions = []
+        params = []
+
+        if search_term:
+            query_conditions.append("name ILIKE %s")
+            params.append(f"%{search_term}%")
+
+        where_clause = (
+            " WHERE " + " AND ".join(query_conditions)
+            if query_conditions
+            else ""
+        )
+
+        # Get total count
+        cur.execute(
+            f"SELECT COUNT(*) FROM author{where_clause}", tuple(params)
+        )
+        total_items = cur.fetchone()[0]
+        total_pages = math.ceil(total_items / limit) if limit > 0 else 0
+
+        # Get paginated authors
+        limit_clause = " LIMIT %s OFFSET %s"
+        params.extend([limit, skip])
+        cur.execute(
+            f"SELECT id, name FROM author{where_clause} ORDER BY name ASC{limit_clause}",
+            tuple(params),
+        )
+        author_rows = cur.fetchall()
+
+        authors = [
+            model.AuthorEntry(id=row[0], name=row[1]) for row in author_rows
+        ]
+
+        return model.PaginatedAuthorsResponse(
+            authors=authors,
+            total_pages=total_pages,
+            current_page=math.ceil((skip + 1) / limit) if limit > 0 else 0,
+            total_items=total_items,
+        )
+
+
+def _map_row_to_quote_page_entry(
+    conn: Connection, row: tuple, current_user_id: Optional[int] = None
+) -> model.QuotePageEntry:
+    quote_id, author_id_val, text, is_public, _, created_at, updated_at = row[
+        :7
+    ]  # Assuming embedding is at index 4 and not directly used here for QuotePageEntry
+
+    author = get_author_by_id(conn, author_id_val)
+    author_name = author.name if author else "Unknown Author"
+
+    tags_for_quote = get_tags_for_quote(conn, quote_id)
+    tag_names = [tag.name for tag in tags_for_quote]
+
+    # For isFavorited and favoriteCount, we'd typically need user context and more queries.
+    # For now, providing default/simplified values.
+    is_favorited_status = False
+    fav_count = 0
+    if current_user_id:
+        is_favorited_status = is_quote_favorited_by_user(
+            conn, user_id=current_user_id, quote_id=quote_id
+        )
+    fav_count = get_quote_favorite_count(conn, quote_id=quote_id)
+
+    return model.QuotePageEntry(
+        id=quote_id,
+        text=text,
+        author=author_name,  # Legacy field, consider removing if frontend doesn't use
+        authorId=author_id_val,
+        authorName=author_name,
+        tags=tag_names,
+        isFavorited=is_favorited_status,  # Placeholder
+        favoriteCount=fav_count,  # Placeholder
+    )
+
+
+def get_quote_page_entries_for_collection(
+    conn: Connection, collection_id: int, current_user_id: Optional[int] = None
+) -> List[model.QuotePageEntry]:
+    quote_entries = []
+    with conn.cursor() as cur:
+        # Fetch essential quote data, including author_id
+        cur.execute(
+            """
+            SELECT q.id, q.author_id, q.text, q.is_public, q.embedding, q.created_at, q.updated_at
+            FROM quote q
+            JOIN collectioncontains cc ON q.id = cc.quote_id
+            WHERE cc.collection_id = %s
+            ORDER BY cc.added_at DESC NULLS LAST, q.created_at DESC;
+            """,
+            (collection_id,),
+        )
+        for row in cur.fetchall():
+            quote_entries.append(
+                _map_row_to_quote_page_entry(conn, row, current_user_id)
+            )
+    return quote_entries

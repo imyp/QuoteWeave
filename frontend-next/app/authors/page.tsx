@@ -1,0 +1,116 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { AuthorCard } from '@/components/author-card';
+import { AuthorSearch } from '@/components/author-search';
+import { getAuthors, AuthorEntry, PaginatedAuthorsResponse } from '@/lib/api'; // Updated import
+import { Button } from '@/components/ui/button'; // For pagination
+import { toast } from 'sonner'; // For error notifications
+
+const ITEMS_PER_PAGE = 12; // Or your preferred number
+
+export default function AuthorsPage() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [authors, setAuthors] = useState<AuthorEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const fetchAuthors = useCallback(async (page: number, search: string) => {
+    setIsLoading(true);
+    try {
+      const skip = (page - 1) * ITEMS_PER_PAGE;
+      const response: PaginatedAuthorsResponse = await getAuthors(search, ITEMS_PER_PAGE, skip);
+      setAuthors(response.authors);
+      setTotalPages(response.total_pages);
+      setTotalItems(response.total_items || 0);
+      setCurrentPage(page);
+    } catch (error) {
+      console.error("Failed to fetch authors:", error);
+      toast.error("Failed to load authors", { description: error instanceof Error ? error.message : "Please try again later." });
+      setAuthors([]); // Clear authors on error
+      setTotalPages(0);
+      setTotalItems(0);
+    }
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchAuthors(1, searchTerm); // Fetch first page on initial load or search term change
+  }, [searchTerm, fetchAuthors]);
+
+  const handleSearch = (term: string) => {
+    setSearchTerm(term);
+    // Reset to page 1 when search term changes, useEffect will trigger fetch
+    // setCurrentPage(1); // No, let useEffect handle it via searchTerm change
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      fetchAuthors(newPage, searchTerm);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <header className="mb-8">
+        <h1 className="text-4xl font-bold text-center text-gray-800 dark:text-white">Discover Authors</h1>
+        <p className="text-lg text-center text-gray-600 dark:text-gray-300 mt-2">Explore and connect with talented authors.</p>
+      </header>
+
+      <div className="mb-8 flex justify-center">
+        <AuthorSearch onSearch={handleSearch} />
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-12">
+          <p className="text-xl text-gray-500 dark:text-gray-400">Loading authors...</p>
+          {/* TODO: Add a spinner component here */}
+        </div>
+      ) : authors.length > 0 ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {authors.map(author => (
+              // Assuming AuthorCard takes an 'author' prop of type AuthorEntry
+              // The AuthorCard expects: id, username, bio (optional), avatarUrl (optional)
+              // Our AuthorEntry from API provides: id, name. We map name to username.
+              // Bio and avatarUrl will be undefined, which AuthorCard should handle.
+              <AuthorCard key={author.id} author={{ ...author, username: author.name }} />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="mt-12 flex justify-center items-center space-x-2">
+              <Button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage <= 1}
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          )}
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Showing {authors.length} of {totalItems} authors
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-xl text-gray-500 dark:text-gray-400">
+            {searchTerm ? `No authors found matching "${searchTerm}".` : "No authors found."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

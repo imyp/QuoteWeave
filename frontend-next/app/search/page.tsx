@@ -84,7 +84,7 @@ export default function SearchPage() {
             Search QuoteWeave
           </h1>
           <p className="mt-3 text-base text-muted-foreground sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl">
-            Find quotes and collections by keywords, authors, or tags.
+            Type a phrase, question, or keywords to find quotes with similar meanings, even if the exact words don&apos;t match.
           </p>
         </div>
 

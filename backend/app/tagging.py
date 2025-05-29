@@ -1,17 +1,19 @@
 import torch
 from transformers import (
     AutoTokenizer,
-    BitsAndBytesConfig,
+    # BitsAndBytesConfig,
     T5ForConditionalGeneration,
 )
 
-REPO_NAME = "fristrup/flan-t5-semantic-tagger-small-4bit"
-QUANTIZATION_CONFIG = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4",
-)
+REPO_NAME = "fristrup/flan-t5-semantic-tagger-small"
+TOKENIZER_NAME = "google/flan-t5-small"
+# QUANTIZATION_CONFIG = BitsAndBytesConfig(
+#     load_in_4bit=True,
+#     bnb_4bit_compute_dtype=torch.float16,
+#     bnb_4bit_use_double_quant=True,
+#     device_map="cpu",
+#     bnb_4bit_quant_type="nf4",
+# )
 
 # Global variables for the model and tokenizer.
 # Lazy loading is implemented in predict_tags.
@@ -23,12 +25,14 @@ def load_model():
     """Loads the model and tokenizer."""
     global tokenizer, model
     if tokenizer is None or model is None:
-        tokenizer = AutoTokenizer.from_pretrained(REPO_NAME)
+        tokenizer = AutoTokenizer.from_pretrained(
+            TOKENIZER_NAME, use_fast=True
+        )
         model = T5ForConditionalGeneration.from_pretrained(
             REPO_NAME,
-            quantization_config=QUANTIZATION_CONFIG,
+            # quantization_config=QUANTIZATION_CONFIG,
             torch_dtype=torch.float16,
-            device_map="auto",  # Automatically select device (CPU/GPU)
+            device_map="cpu",  # Automatically select device (CPU/GPU)
         )
         model.config.no_repeat_ngram_size = 2  # Prevents repeating 2-grams
         model.config.repetition_penalty = 2.0  # Penalizes token repetition

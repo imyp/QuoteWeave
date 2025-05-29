@@ -4,6 +4,9 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_SYSTEM_PYTHON=1
 # Tell uv to use the system python it finds, not manage its own shims for now
 
+# Install system dependencies, including postgresql-client
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app/
 
 # Install uv

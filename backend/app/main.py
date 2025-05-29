@@ -1,7 +1,9 @@
+import math
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Annotated, List, Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
@@ -15,6 +17,10 @@ import app.embedding as embedding
 import app.model as model
 import app.security as security
 import app.tagging as tagging
+
+# Load environment variables from .env file
+# This should be one of the first things your application does.
+load_dotenv()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -32,12 +38,22 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep) -> model.User:
     try:
         payload = security.jwt_decode(token)
         username: str | None = payload.get("sub")
+        print(
+            f"[get_current_user] Extracted username from token: {username}"
+        )  # DEBUG
         if username is None:
+            print(
+                "[get_current_user] Username is None in token payload."
+            )  # DEBUG
             raise credentials_exception
-    except InvalidTokenError:
+    except InvalidTokenError as e:
+        print(f"[get_current_user] InvalidTokenError: {e}")  # DEBUG
         raise credentials_exception
     user = crud.get_user_by_name(conn, username)
     if user is None:
+        print(
+            f"[get_current_user] User not found by username: {username}"
+        )  # DEBUG
         raise credentials_exception
     return user
 
@@ -48,13 +64,32 @@ CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
 async def get_optional_current_user(
     conn: ConnectionDep, token: Optional[TokenDep] = None
 ) -> Optional[model.User]:
+    print(
+        f"[get_optional_current_user] Received token: {'present' if token else token}"
+    )  # DEBUG
     if token is None:
+        print(
+            "[get_optional_current_user] Token is None, returning None."
+        )  # DEBUG
         return None
     try:
-        return await get_current_user(conn, token)
+        print(
+            "[get_optional_current_user] Attempting to call get_current_user."
+        )  # DEBUG
+        user = await get_current_user(conn, token)
+        print(
+            f"[get_optional_current_user] get_current_user returned: {'user object' if user else 'None'}"
+        )  # DEBUG
+        return user
     except HTTPException as e:
+        print(
+            f"[get_optional_current_user] HTTPException caught: status={e.status_code}, detail={e.detail}"
+        )  # DEBUG
         # If token is invalid or user not found, treat as anonymous for this optional case
         if e.status_code == status.HTTP_401_UNAUTHORIZED:
+            print(
+                "[get_optional_current_user] Caught 401, returning None."
+            )  # DEBUG
             return None
         raise  # Re-raise other exceptions
 
@@ -140,13 +175,13 @@ async def login_for_access_token(
     conn: ConnectionDep, form_data: PasswordFormDep
 ):
     user = crud.get_user_by_name(conn, form_data.username)
-    if user is None or user.password is None:
+    if user is None or user.password_hash is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not security.check_password(form_data.password, user.password):
+    if not security.check_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -213,6 +248,38 @@ async def update_current_user_profile_endpoint(
         )
 
 
+@app.get(
+    "/authors", response_model=model.PaginatedAuthorsResponse, tags=["Authors"]
+)
+async def list_authors_endpoint(
+    conn: ConnectionDep,
+    search: Optional[str] = Query(
+        None, description="Text to search for in author names."
+    ),
+    skip: int = Query(
+        0, ge=0, description="Number of authors to skip for pagination"
+    ),
+    limit: int = Query(
+        20, gt=0, le=100, description="Number of authors to return"
+    ),
+):
+    """
+    Retrieves a paginated list of authors, optionally filtered by a search term.
+    """
+    try:
+        authors_response = crud.get_authors_paginated(
+            conn, search_term=search, limit=limit, skip=skip
+        )
+        return authors_response
+    except Exception as e:
+        # Log the exception details for debugging
+        # logger.error(f"Error fetching authors: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while fetching authors.",
+        )
+
+
 @app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_current_user_password(
     conn: ConnectionDep,
@@ -256,33 +323,42 @@ async def update_current_user_preferences(
 
 @app.get("/quotes/page/{page_number}", response_model=model.QuotePageResponse)
 async def get_quotes_page(
-    conn: ConnectionDep, page_number: int, current_user: OptionalCurrentUserDep
+    conn: ConnectionDep,
+    page_number: int,
+    current_user: OptionalCurrentUserDep,
+    author_id: Optional[int] = Query(
+        None, description="Filter quotes by author ID"
+    ),
 ):
-    user_id = current_user.id if current_user else None
-    # Ensure the page_size matches what frontend expects (e.g., 9 or configurable)
-    # The crud function was updated to use page_size, but here it's hardcoded to 20 in the call.
-    # Let's assume page_size is 9 for now as per frontend constant.
-    # We should ideally pass page_size from frontend or define it consistently.
-    quotes_page_entries = crud.get_quotes_for_page(
-        conn, page_size=9, page_number=page_number, current_user_id=user_id
+    # This should be consistent with the default value in getQuotePage in quote-utils.ts
+    # and also the value in PaginatedQuotesResponse in the frontend component.
+    page_size = 9
+    quotes = crud.get_quotes_for_page(
+        conn,
+        page_size,
+        page_number,
+        current_user.id if current_user else None,
+        author_id=author_id,
     )
-
-    # Need total pages for the response. The model.QuotePageResponse currently only has `quotes`.
-    # It should have `totalPages` too as per frontend lib/api.ts
-    # Let's modify QuotePageResponse model or how it's constructed.
-    # For now, fetching total pages separately.
-    total_pages = crud.get_quotes_total_pages(conn, page_size=9)
-
-    return model.QuotePageResponse(
-        quotes=quotes_page_entries, totalPages=total_pages
+    total_pages = crud.get_quotes_total_pages(
+        conn, page_size, author_id=author_id
     )
+    return model.QuotePageResponse(quotes=quotes, totalPages=total_pages)
 
 
 @app.get("/quotes/get-n-pages", response_model=model.QuotesTotalPagesResponse)
-async def get_quotes_total_pages(conn: ConnectionDep):
+async def get_quotes_total_pages(
+    conn: ConnectionDep,
+    author_id: Optional[int] = Query(
+        None, description="Filter quotes by author ID"
+    ),
+):
     # This needs to be consistent with page_size used in get_quotes_page
-    n_pages = crud.get_quotes_total_pages(conn, page_size=9)  # Assuming 9
-    return model.QuotesTotalPagesResponse(n_pages=n_pages)
+    page_size = 9
+    total_pages = crud.get_quotes_total_pages(
+        conn, page_size, author_id=author_id
+    )
+    return model.QuotesTotalPagesResponse(n_pages=total_pages)
 
 
 @app.get("/quotes/me", response_model=model.QuoteCollection)
@@ -293,6 +369,78 @@ async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
         )
     quotes = crud.get_quotes_by_author(conn, current_user.author_id)
     return model.QuoteCollection(quotes=quotes)
+
+
+@app.get(
+    "/quotes/search/tag/{tag_name_str}", response_model=model.QuotePageResponse
+)
+async def get_quotes_by_tag_name_endpoint(
+    tag_name_str: str,
+    conn: ConnectionDep,
+    current_user: OptionalCurrentUserDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+):
+    """
+    Get quotes associated with a specific tag name, with pagination.
+    """
+    tag = crud.get_tag_by_name(conn, tag_name_str.lower())
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tag '{tag_name_str}' not found.",
+        )
+
+    quotes_for_tag = crud.get_quotes_by_tag(conn, tag.id)
+    if not quotes_for_tag:
+        # Return empty QuotePageResponse if tag exists but has no quotes
+        return model.QuotePageResponse(
+            quotes=[], totalPages=0, currentPage=page, totalItems=0
+        )
+
+    user_id = current_user.id if current_user else None
+    quote_page_entries = []
+
+    # Manual pagination
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    paginated_db_quotes = quotes_for_tag[start_index:end_index]
+
+    for quote_model in paginated_db_quotes:
+        author = crud.get_author_by_id(conn, quote_model.author_id)
+        author_name = author.name if author else "Unknown"
+        author_id = author.id if author else None
+
+        is_favorited = False
+        favorite_count = 0
+        if user_id:
+            is_favorited = crud.is_quote_favorited_by_user(
+                conn, user_id, quote_model.id
+            )
+        favorite_count = crud.get_quote_favorite_count(conn, quote_model.id)
+
+        quote_page_entries.append(
+            model.QuotePageEntry(
+                id=quote_model.id,
+                text=quote_model.text,
+                author=author_name,
+                authorName=author_name,
+                authorId=author_id,
+                tags=[t.name for t in quote_model.tags],
+                isFavorited=is_favorited,
+                favoriteCount=favorite_count,
+            )
+        )
+
+    total_quotes_for_tag = len(quotes_for_tag)
+    total_pages_for_tag = math.ceil(total_quotes_for_tag / page_size)
+
+    return model.QuotePageResponse(
+        quotes=quote_page_entries,
+        totalPages=total_pages_for_tag,
+        currentPage=page,
+        totalItems=total_quotes_for_tag,
+    )
 
 
 @app.get("/quotes/{quote_id}", response_model=Optional[model.QuotePageEntry])
@@ -664,7 +812,13 @@ async def get_single_collection(
     conn: ConnectionDep,
     current_user: OptionalCurrentUserDep,
 ):
-    collection = crud.get_collection_by_id(conn, collection_id)
+    user_id = current_user.id if current_user else None
+    print(
+        f"Attempting to fetch collection {collection_id} for user_id: {user_id}"
+    )  # DEBUG
+    collection = crud.get_collection_by_id(
+        conn, collection_id, current_user_id=user_id
+    )
     if collection is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -673,10 +827,21 @@ async def get_single_collection(
 
     # If collection is not public, only the author can see it
     if not collection.is_public:
+        print(f"Collection {collection_id} is private.")  # DEBUG
+        if current_user:  # DEBUG
+            print(
+                f"Current user ID: {current_user.id}, Current user author_id: {current_user.author_id}"
+            )  # DEBUG
+        else:  # DEBUG
+            print("Current user is None.")  # DEBUG
+        print(f"Collection author_id: {collection.author_id}")  # DEBUG
         if (
             current_user is None
             or current_user.author_id != collection.author_id
         ):
+            print(
+                f"Authorization failed for user {current_user.id if current_user else 'None'} and collection {collection_id}."
+            )  # DEBUG
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this collection",
@@ -779,9 +944,8 @@ async def delete_existing_collection(
 async def search_collections_endpoint(
     conn: ConnectionDep,
     query: str = Query(
-        ...,
-        min_length=1,
-        description="Text to search for in collection names and descriptions",
+        "",
+        description="Text to search for in collection names and descriptions. Empty string for all public.",
     ),
     limit: int = Query(
         10, gt=0, le=100, description="Number of results to return"
@@ -790,11 +954,6 @@ async def search_collections_endpoint(
         0, ge=0, description="Number of results to skip for pagination"
     ),
 ):
-    if not query.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Search query cannot be empty.",
-        )
     try:
         collections = crud.search_collections(
             conn, search_term=query, limit=limit, skip=skip
@@ -809,3 +968,44 @@ async def search_collections_endpoint(
 
 
 # --- Collection Search Endpoint --- END ---
+
+
+# --- Tag Search Endpoint --- START ---
+@app.get("/tags/search/", response_model=List[model.TagEntry], tags=["Tags"])
+async def search_tags_endpoint(
+    conn: ConnectionDep,
+    query: str = Query(
+        ...,
+        min_length=1,  # Require at least 1 char for search
+        description="Text to search for in tag names.",
+    ),
+    limit: int = Query(
+        20, gt=0, le=100, description="Number of results to return"
+    ),
+    skip: int = Query(
+        0, ge=0, description="Number of results to skip for pagination"
+    ),
+):
+    """
+    Performs a case-insensitive search for tags by name and returns them
+    with their associated quote counts.
+    """
+    if (
+        not query.strip()
+    ):  # Should be caught by min_length, but good to be safe
+        return []  # Or raise HTTPException for empty query if preferred
+    try:
+        tags_with_counts = crud.search_tags_by_name(
+            conn, search_term=query, limit=limit, skip=skip
+        )
+        return tags_with_counts
+    except Exception as e:
+        # Log the exception e for debugging purposes
+        print(f"Error searching tags: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search tags.",
+        )
+
+
+# --- Tag Search Endpoint --- END ---

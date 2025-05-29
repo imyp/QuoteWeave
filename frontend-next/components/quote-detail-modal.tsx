@@ -104,7 +104,7 @@ export default function QuoteDetailModal({ quote: initialQuote, onQuoteUpdate }:
     }
   };
 
-  const authorDisplayName = typeof quote.author === 'string' ? quote.author : quote.authorName || 'Unknown Author';
+  const authorDisplayName = quote.authorName || 'Unknown Author';
   // The link now needs a numeric ID. Ensure quote.authorId is available and is a number from the API if this link is used.
   const authorLink = quote.authorId ? `/authors/${quote.authorId}` : '#';
 

@@ -17,13 +17,12 @@ export interface TokenResponse {
 export interface QuotePageEntry {
   id: number;
   text: string;
-  author: string; // This was 'author: string', if it's an object, it needs to be defined e.g. { id: number, name: string }
+  // author: string; // This was 'author: string', if it's an object, it needs to be defined e.g. { id: number, name: string }
   // For now, let's assume the component was adapting from a flat structure.
   // The component uses quote.author.id and quote.author.name, AND quote.authorId, quote.authorName.
-  // This suggests the backend data structure for author might be inconsistent or the frontend adapted it.
   // Let's define it based on the most detailed usage and assume backend can provide it:
   authorId?: number; // Made optional if `author` object is primary
-  authorName?: string; // Made optional if `author` object is primary
+  authorName?: string; // Made optional if `author` object is primary. This will be the source of truth for author's name.
   tags: string[];
   isFavorited?: boolean; // Added
   favoriteCount?: number;  // Added
@@ -68,6 +67,7 @@ export interface QuotePageResponse {
   currentPage?: number; // Optional: if backend provides current page
 }
 
+
 const BASE_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface FetchApiOptions extends RequestInit {
@@ -103,8 +103,8 @@ async function fetchApi<T>(endpoint: string, options: FetchApiOptions = {}): Pro
       }
       const errorMessage =
         typeof errorData.detail === 'string' ? errorData.detail :
-        Array.isArray(errorData.detail) ? errorData.detail.map(d => d.msg || 'Unknown error detail').join(', ') :
-        `API request failed with status ${response.status}`;
+          Array.isArray(errorData.detail) ? errorData.detail.map(d => d.msg || 'Unknown error detail').join(', ') :
+            `API request failed with status ${response.status}`;
 
       // Show generic error toast
       toast.error("An API error occurred", { description: errorMessage });
@@ -120,8 +120,8 @@ async function fetchApi<T>(endpoint: string, options: FetchApiOptions = {}): Pro
   } catch (error) {
     // Catch network errors or other issues not caught by !response.ok
     if (!(error instanceof Error && error.message.startsWith("API request failed"))) {
-        // Avoid double-toasting if already handled by response.ok check
-        toast.error("Network or system error", { description: error instanceof Error ? error.message : String(error) });
+      // Avoid double-toasting if already handled by response.ok check
+      toast.error("Network or system error", { description: error instanceof Error ? error.message : String(error) });
     }
     throw error; // Re-throw the error to be caught by the calling function if needed
   }
@@ -186,13 +186,13 @@ export const getQuoteById = async (quoteId: number, token?: string | null): Prom
   // We need to catch 404 and return null, otherwise rethrow.
   try {
     return await fetchApi<QuotePageEntry>(`/quotes/${quoteId}`, {
-        method: 'GET',
-        token,
+      method: 'GET',
+      token,
     });
   } catch (error) {
     // A bit simplistic, ideally check error.status or similar if fetchApi exposed it
     if (error instanceof Error && error.message.includes("404")) { // Check if message contains 404
-        return null; // Quote not found
+      return null; // Quote not found
     }
     throw error; // Re-throw other errors
   }
@@ -259,17 +259,15 @@ export const searchCollections = async (
   token?: string | null // Token might be used in future for personalized collection results
 ): Promise<CollectionEntry[]> => {
   const params = new URLSearchParams({
-    query,
     limit: String(limit),
     skip: String(skip),
   });
-  // Assuming search returns a list of collections, not a paginated response object
-  // If it returns a paginated response, this should be Promise<PaginatedCollectionsResponse>
-  // The CollectionEntry type should come from a shared location or be identical to backend's output.
-  // For now, assuming it matches what frontend expects from collection-utils.ts after recent updates.
-  return fetchApi<CollectionEntry[]>(`/api/v1/collections/search/?${params.toString()}`, {
+  params.append('query', query); // Always append query, even if empty string
+
+  const endpoint = `/api/v1/collections/search/?${params.toString()}`;
+  return fetchApi<CollectionEntry[]>(endpoint, {
     method: 'GET',
-    token, // Pass token if available, backend might use it for personalization later
+    token,
   });
 };
 
@@ -278,17 +276,17 @@ export const searchCollections = async (
 // This was previously defined in collection-utils.ts, ensuring it's available and exported here.
 // It should match the structure returned by the backend for individual collections and lists.
 export interface CollectionEntry {
-    id: number;
-    name: string;
-    description?: string; // Made optional to align with backend Optional[str]
-    isPublic: boolean;
-    authorId: number;
-    // authorName might be included if backend provides it, especially for public listings
-    authorName?: string;
-    quoteCount?: number; // Often included in listings
-    // quotes?: QuotePageEntry[]; // Full quotes usually in getCollectionById, not simple listings
-    createdAt?: string; // ISO date string
-    updatedAt?: string; // ISO date string
+  id: number;
+  name: string;
+  description?: string; // Made optional to align with backend Optional[str]
+  isPublic: boolean;
+  authorId: number;
+  // authorName might be included if backend provides it, especially for public listings
+  authorName?: string;
+  quoteCount?: number; // Often included in listings
+  // quotes?: QuotePageEntry[]; // Full quotes usually in getCollectionById, not simple listings
+  createdAt?: string; // ISO date string
+  updatedAt?: string; // ISO date string
 }
 
 // New interface for detailed collection view, including quotes
@@ -307,20 +305,20 @@ export interface CreateCollectionPayload {
 /**
  * Creates a new collection.
  */
-export const createCollection = async (
+export async function createCollection(
   payload: CreateCollectionPayload,
-  token: string | null
-): Promise<CollectionEntry> => {
-  if (!token) throw new Error('Authentication token is required to create a collection.');
-
-  // Backend now derives author_id from the authenticated user via token.
-  // The payload sent matches CreateCollectionClientPayload on the backend.
-  return fetchApi<CollectionEntry>('/collections/create', {
+  token: string
+): Promise<CollectionEntry> {
+  console.log("API CALL: Creating new collection with payload:", payload);
+  const response = await fetchApi<CollectionEntry>('/collections/create', {
     method: 'POST',
-    body: JSON.stringify(payload), // Send the frontend payload directly
-    token,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
-};
+  return response;
+}
 
 export interface UpdateCollectionPayload {
   name?: string;
@@ -441,6 +439,22 @@ export interface AuthorDetailsResponse {
   // bio is not part of backend model.AuthorResponse
 }
 
+// --- New Author List Types ---
+export interface AuthorEntry {
+  id: number;
+  name: string;
+  // bio?: string; // Add if you include it in backend AuthorEntry
+  // avatarUrl?: string; // Add if you include it in backend AuthorEntry
+}
+
+export interface PaginatedAuthorsResponse {
+  authors: AuthorEntry[];
+  total_pages: number;
+  current_page?: number;
+  total_items?: number;
+}
+// --- End New Author List Types ---
+
 /**
  * Fetches details for a specific author.
  */
@@ -450,6 +464,26 @@ export const getAuthorDetails = async (authorId: number): Promise<AuthorDetailsR
     // No token usually needed for public author profiles
   });
 };
+
+// --- New Function to Get Authors ---
+export const getAuthors = async (
+  searchTerm?: string,
+  limit: number = 20,
+  skip: number = 0,
+  // token?: string | null // Authors list is public, token not needed for now
+): Promise<PaginatedAuthorsResponse> => {
+  const params = new URLSearchParams();
+  if (searchTerm) {
+    params.append('search', searchTerm);
+  }
+  params.append('limit', String(limit));
+  params.append('skip', String(skip));
+
+  return fetchApi<PaginatedAuthorsResponse>(`/authors?${params.toString()}`, {
+    method: 'GET',
+  });
+};
+// --- End New Function to Get Authors ---
 
 // --- Tag Generation --- //
 export interface GenerateTagsPayload {
@@ -574,5 +608,53 @@ export const updateUserProfile = async (payload: UpdateUserProfilePayload, token
     method: 'PUT',
     body: JSON.stringify(payload),
     token,
+  });
+};
+
+/**
+ * Searches quotes by a specific tag.
+ * Assumes a backend endpoint like /quotes/search/tag/{tagName}
+ */
+export const searchQuotesByTag = async (
+  tagName: string,
+  page: number = 1,
+  limit: number = 10,
+  token?: string | null
+): Promise<QuotePageResponse> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  return fetchApi<QuotePageResponse>(`/quotes/search/tag/${encodeURIComponent(tagName)}?${params.toString()}`, {
+    method: 'GET',
+    token,
+  });
+};
+
+// --- Tag Search --- //
+
+/**
+ * Searches tags by name.
+ * Uses the /tags/search/ endpoint from the backend.
+ */
+export const searchTags = async (
+  query: string,
+  limit: number = 20,
+  skip: number = 0,
+  token?: string | null // Token might be needed if search becomes personalized
+): Promise<TagEntry[]> => {
+  if (!query.trim()) {
+    // Avoid API call if query is empty, backend would reject or return empty anyway
+    return [];
+  }
+  const params = new URLSearchParams({
+    query,
+    limit: String(limit),
+    skip: String(skip),
+  });
+  const endpoint = `/tags/search/?${params.toString()}`;
+  return fetchApi<TagEntry[]>(endpoint, {
+    method: 'GET',
+    token, // Pass token if available, though current backend endpoint doesn't use it
   });
 };

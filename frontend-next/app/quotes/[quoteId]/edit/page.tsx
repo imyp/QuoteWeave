@@ -80,7 +80,7 @@ export default function EditQuotePage() {
           if (data) {
             setOriginalQuote(data);
             setQuoteText(data.text);
-            setAuthorName(data.authorName || data.author || '');
+            setAuthorName(data.authorName || '');
             setTags(data.tags || []);
           } else {
             setError("Quote not found. It may have been deleted or the ID is incorrect.");
@@ -152,7 +152,7 @@ export default function EditQuotePage() {
 
     const payload: UpdateQuotePayload = {
       text: quoteText === originalQuote.text ? undefined : quoteText,
-      authorName: authorName === (originalQuote.authorName || originalQuote.author) ? undefined : authorName,
+      authorName: authorName === originalQuote.authorName ? undefined : authorName,
       tags: JSON.stringify(tags) === JSON.stringify(originalQuote.tags || []) ? undefined : tags,
     };
 
@@ -175,7 +175,7 @@ export default function EditQuotePage() {
       setSuccessMessage("Quote updated successfully!");
       setOriginalQuote(updatedQuote);
       setQuoteText(updatedQuote.text);
-      setAuthorName(updatedQuote.authorName || updatedQuote.author || '');
+      setAuthorName(updatedQuote.authorName || '');
       setTags(updatedQuote.tags || []);
       setTimeout(() => {
         router.push(`/quotes/${quoteIdString}`);

@@ -1,18 +1,10 @@
 import logging  # Added for logging
 import os  # Added for path joining
-from typing import (  # Iterable for embed method, Dict, Any for quote data
-    Any,
-    Dict,
-    Iterable,
-    List,
-)
+from typing import List
 
 import numpy as np  # Added for array operations
 import pandas as pd  # Added pandas
 from fastembed import TextEmbedding
-from sklearn.metrics.pairwise import (
-    cosine_similarity,  # Added for similarity calculation
-)
 
 from app.model import CSVMockQuote  # Import the new model
 
@@ -233,13 +225,16 @@ def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
 def search_similar_quotes(
     query_text: str, top_n: int = 10
 ) -> List[CSVMockQuote]:
-    """Searches for quotes similar to the query_text using embeddings."""
-    if (
-        not CSV_QUOTES_DATA
-        or CSV_QUOTE_EMBEDDINGS is None
-        or CSV_QUOTE_EMBEDDINGS.size == 0
-    ):
-        logger.info("No mock quote data or embeddings available for search.")
+    """
+    Searches for quotes similar to the query_text using embeddings.
+    This version is conceptual and demonstrates how one might structure a query
+    for pgvector. It does not execute the query.
+    """
+    if not CSV_QUOTES_DATA:  # Keep this check for the conceptual structure
+        logger.info(
+            "No mock quote data available to conceptually search against. "
+            "In a real scenario, this check might be different or removed if DB is primary source."
+        )
         return []
 
     query_embedding_list = generate_embedding(query_text)
@@ -249,32 +244,27 @@ def search_similar_quotes(
         )
         return []
 
-    query_embedding = np.array(query_embedding_list).reshape(
-        1, -1
-    )  # Reshape for cosine_similarity
+    # Convert list to string format for pgvector query
+    query_embedding_str = str(query_embedding_list)
 
-    try:
-        similarities = cosine_similarity(query_embedding, CSV_QUOTE_EMBEDDINGS)
-        # Get indices of top_n most similar quotes
-        # similarities is a 2D array like [[sim1, sim2, ...]], so access first row
-        if similarities.size == 0:
-            logger.warning(
-                "Cosine similarity calculation resulted in empty array."
-            )
-            return []
+    # Conceptual pgvector query
+    # This is NOT executable code as-is. It's a string representing a SQL query.
+    # You would use a library like psycopg2 or SQLAlchemy to execute this.
+    # Assumes a table named 'items' with an 'embedding' column of type 'vector'.
+    pgvector_query = f"SELECT id, quote, author, tags, 1 - (embedding <=> '{query_embedding_str}') AS cosine_similarity FROM items ORDER BY cosine_similarity DESC LIMIT {top_n};"
 
-        # Squeeze to 1D array if necessary, then get sorted indices
-        sorted_indices = np.argsort(similarities[0])[::-1]  # Descending order
+    logger.info(
+        f"Conceptual pgvector query for similarity search: {pgvector_query}"
+    )
+    logger.info(
+        "This function is conceptual and does not execute the database query. "
+        "Actual database interaction code is required to fetch results."
+    )
 
-        top_indices = sorted_indices[:top_n]
-
-        results = [
-            CSV_QUOTES_DATA[i] for i in top_indices if i < len(CSV_QUOTES_DATA)
-        ]
-        return results
-    except Exception as e:
-        logger.error(f"Error during similarity search: {e}")
-        return []
+    # Since we are not executing the query, we return an empty list.
+    # In a real implementation, you would execute the query and process the results.
+    # For example, results would be fetched and mapped to CSVMockQuote objects.
+    return []
 
 
 # Ensure model and data are loaded at module import time if not already handled by main.py startup

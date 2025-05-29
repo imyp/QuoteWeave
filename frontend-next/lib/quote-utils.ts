@@ -80,12 +80,15 @@ export async function getQuotePage(
   page: number,
   limit: number = 9,
   filters?: { tag?: string; authorId?: number }
-): Promise<PaginatedQuotesResponse> { // This one might not need ApiResponse wrapper if direct data is preferred
+): Promise<PaginatedQuotesResponse> {
   console.log(`API CALL: Fetching quotes page ${page}, limit ${limit}, filters:`, filters);
-  const response = await fetch(`${API_BASE_URL}/quotes/page/${page}?page_size=${limit}`);
-  // For GET operations that directly feed data displays, returning raw data or a simpler error throw might be fine.
-  // The linter errors are for update/delete, so focusing on those for ApiResponse wrapper.
-  if (!response.ok) { // Simplified error handling for this GET example
+  let url = `${API_BASE_URL}/quotes/page/${page}?page_size=${limit}`;
+  if (filters?.authorId) {
+    url += `&author_id=${filters.authorId}`;
+  }
+  // TODO: Add tag filter if present: if (filters?.tag) { url += `&tag=${encodeURIComponent(filters.tag)}`; }
+  const response = await fetch(url);
+  if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(errorData.detail || `Failed to fetch page ${page}`);
   }
@@ -95,9 +98,14 @@ export async function getQuotePage(
 export async function getQuoteTotalPages(
   limit: number = 9,
   filters?: { tag?: string; authorId?: number }
-): Promise<number> { // Similar to getQuotePage, direct data or simple error
+): Promise<number> {
   console.log(`API CALL: Fetching total quote pages, limit ${limit}, filters:`, filters);
-  const response = await fetch(`${API_BASE_URL}/quotes/get-n-pages?page_size=${limit}`);
+  let url = `${API_BASE_URL}/quotes/get-n-pages?page_size=${limit}`;
+  if (filters?.authorId) {
+    url += `&author_id=${filters.authorId}`;
+  }
+  // TODO: Add tag filter if present
+  const response = await fetch(url);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(errorData.detail || `Failed to fetch total pages`);

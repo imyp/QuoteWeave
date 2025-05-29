@@ -77,7 +77,7 @@ logging.basicConfig(
 #   PRIMARY KEY (collection_id, quote_id)
 # );
 #
-# userfavorites (
+# user_quote_favorite (
 #   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 #   quote_id INTEGER REFERENCES quotes(id) ON DELETE CASCADE,
 #   favorited_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -181,7 +181,7 @@ def generate_sql_from_csv(
     users_list = []  # list of user dicts
     collections_list = []  # list of collection dicts
     collection_quotes_links = []  # list of (collection_id, quote_id) tuples
-    user_favorites_links = []  # list of (user_id, quote_id) tuples
+    user_quote_favorite_links = []  # list of (user_id, quote_id) tuples
 
     next_author_id = 1
     next_tag_id = 1
@@ -379,12 +379,20 @@ def generate_sql_from_csv(
             )  # User might have 0 to 3 collections
             for _ in range(num_collections_for_user):
                 collection_name = f"{user_data['username_for_mock_collections']}'s Collection #{next_collection_id}"
+                # Ensure author_id is available and not None for collections, as schema requires it.
+                # The user creation logic seems to ensure author_id is an integer.
+                if user_data.get("author_id") is None:
+                    logger.warning(
+                        f"User {user_data.get('id')} has no author_id, cannot create collection {collection_name}. Skipping."
+                    )
+                    continue
+
                 collections_list.append(
                     {
                         "id": next_collection_id,
-                        "user_id": user_data[
-                            "id"
-                        ],  # Correctly use user_id from users_list
+                        "author_id": user_data[
+                            "author_id"
+                        ],  # Changed from user_id to author_id
                         "name": collection_name,
                         "description": f"A mock collection by {user_data['username_for_mock_collections']}.",
                         "is_public": random.choice([True, False]),
@@ -418,12 +426,14 @@ def generate_sql_from_csv(
                         # Avoid duplicate favorites by the same user for the same quote
                         if not any(
                             fav[0] == user_data["id"] and fav[1] == quote["id"]
-                            for fav in user_favorites_links
+                            for fav in user_quote_favorite_links
                         ):
-                            user_favorites_links.append(
+                            user_quote_favorite_links.append(
                                 (user_data["id"], quote["id"])
                             )
-    logger.info(f"Generated {len(user_favorites_links)} user favorite links.")
+    logger.info(
+        f"Generated {len(user_quote_favorite_links)} user favorite links."
+    )
 
     logger.info(f"Generating SQL file: {sql_filepath}")
     with open(sql_filepath, "w", encoding="utf-8") as sqlfile:
@@ -439,21 +449,20 @@ def generate_sql_from_csv(
         for name, author_id_val in authors_map.items():
             escaped_name = name.replace("'", "''")
             sqlfile.write(
-                f"INSERT INTO authors (id, name) VALUES ({author_id_val}, '{escaped_name}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;\n"
+                f"INSERT INTO author (id, name) VALUES ({author_id_val}, '{escaped_name}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;\n"
             )
         sqlfile.write("\n")
 
         # Users
         sqlfile.write("-- Users --\n")
         for user_info in users_list:
-            # Ensure author_id is handled if it's None (though current logic assigns one)
             author_id_sql = (
                 "NULL"
                 if user_info["author_id"] is None
                 else user_info["author_id"]
             )
             sqlfile.write(
-                f"INSERT INTO users (id, author_id, email, password_hash, created_at) VALUES ({user_info['id']}, {author_id_sql}, '{user_info['email']}', '{user_info['password_hash']}', '{user_info['created_at']}') ON CONFLICT (id) DO NOTHING;\n"
+                f"INSERT INTO \"user\" (id, author_id, email, password_hash, created_at) VALUES ({user_info['id']}, {author_id_sql}, '{user_info['email']}', '{user_info['password_hash']}', '{user_info['created_at']}') ON CONFLICT (id) DO NOTHING;\n"
             )
         sqlfile.write("\n")
 
@@ -462,7 +471,7 @@ def generate_sql_from_csv(
         for name, tag_id_val in tags_map.items():
             escaped_name = name.replace("'", "''")
             sqlfile.write(
-                f"INSERT INTO tags (id, name) VALUES ({tag_id_val}, '{escaped_name}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;\n"
+                f"INSERT INTO tag (id, name) VALUES ({tag_id_val}, '{escaped_name}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;\n"
             )
         sqlfile.write("\n")
 
@@ -475,16 +484,16 @@ def generate_sql_from_csv(
                 " ", ""
             )  # Compact string like "[0.1,0.2,...]"
             sqlfile.write(
-                f"INSERT INTO quotes (id, text, author_id, embedding, is_public, created_at, updated_at) VALUES ({q_info['id']}, '{escaped_text}', {q_info['author_id']}, '{embedding_str}'::vector, {q_info['is_public']}, '{q_info['created_at']}', '{q_info['updated_at']}') ON CONFLICT (id) DO NOTHING;\n"
+                f"INSERT INTO quote (id, text, author_id, embedding, is_public, created_at, updated_at) VALUES ({q_info['id']}, '{escaped_text}', {q_info['author_id']}, '{embedding_str}'::vector, {q_info['is_public']}, '{q_info['created_at']}', '{q_info['updated_at']}') ON CONFLICT (id) DO NOTHING;\n"
             )
         sqlfile.write("\n")
 
-        # Quote-Tag Associations (quote_tags)
-        sqlfile.write("-- Quote-Tag Associations (quote_tags) --\n")
+        # Quote-Tag Associations (taggedas)
+        sqlfile.write("-- Quote-Tag Associations (taggedas) --\n")
         for q_info in quotes_list:
             for tag_id_val in q_info["tag_ids"]:
                 sqlfile.write(
-                    f"INSERT INTO quote_tags (quote_id, tag_id) VALUES ({q_info['id']}, {tag_id_val}) ON CONFLICT (quote_id, tag_id) DO NOTHING;\n"
+                    f"INSERT INTO taggedas (quote_id, tag_id) VALUES ({q_info['id']}, {tag_id_val}) ON CONFLICT (quote_id, tag_id) DO NOTHING;\n"
                 )
         sqlfile.write("\n")
 
@@ -495,8 +504,9 @@ def generate_sql_from_csv(
             escaped_desc = col_info.get("description", "").replace(
                 "'", "''"
             )  # Ensure description exists
+            # Corrected table name to 'collection' and column to 'author_id'
             sqlfile.write(
-                f"INSERT INTO collections (id, user_id, name, description, is_public, created_at, updated_at) VALUES ({col_info['id']}, {col_info['user_id']}, '{escaped_name}', '{escaped_desc}', {col_info['is_public']}, '{col_info['created_at']}', '{col_info['updated_at']}') ON CONFLICT (id) DO NOTHING;\n"
+                f"INSERT INTO collection (id, author_id, name, description, is_public, created_at, updated_at) VALUES ({col_info['id']}, {col_info['author_id']}, '{escaped_name}', '{escaped_desc}', {col_info['is_public']}, '{col_info['created_at']}', '{col_info['updated_at']}') ON CONFLICT (id) DO NOTHING;\n"
             )
         sqlfile.write("\n")
 
@@ -510,11 +520,11 @@ def generate_sql_from_csv(
             )
         sqlfile.write("\n")
 
-        # User Favorites (userfavorites)
-        sqlfile.write("-- User Favorites (userfavorites) --\n")
-        for usr_id, q_id in user_favorites_links:
+        # User Favorites (user_quote_favorite)
+        sqlfile.write("-- User Favorites (user_quote_favorite) --\n")
+        for usr_id, q_id in user_quote_favorite_links:
             sqlfile.write(
-                f"INSERT INTO userfavorites (user_id, quote_id, favorited_at) VALUES ({usr_id}, {q_id}, '{datetime.now(UTC).isoformat()}') ON CONFLICT (user_id, quote_id) DO NOTHING;\n"
+                f"INSERT INTO user_quote_favorite (user_id, quote_id, created_at) VALUES ({usr_id}, {q_id}, '{datetime.now(UTC).isoformat()}') ON CONFLICT (user_id, quote_id) DO NOTHING;\n"
             )
         sqlfile.write("\n")
 

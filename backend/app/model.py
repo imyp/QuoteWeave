@@ -77,7 +77,7 @@ class User(BaseModel):
     author_id: Optional[int] = None
     username: str
     email: str
-    password: Optional[str] = None
+    password_hash: Optional[str] = None
     email_notifications: Optional[bool] = None
     push_notifications: Optional[bool] = None
 
@@ -160,6 +160,7 @@ class Collection(BaseModel):
     quote_count: Optional[int] = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    quotes: List["QuotePageEntry"] = []
 
 
 class CollectionSimple(BaseModel):
@@ -170,6 +171,7 @@ class CollectionSimple(BaseModel):
 class CollectionQuoteLink(BaseModel):
     quote_id: int
     collection_id: int
+    added_at: Optional[datetime] = None
 
 
 class TagQuoteLink(BaseModel):
@@ -180,7 +182,7 @@ class TagQuoteLink(BaseModel):
 class QuotePageEntry(BaseModel):
     id: int
     text: str
-    author: str
+    author: Optional[str] = None
     authorId: Optional[int] = None
     authorName: Optional[str] = None
     tags: List[str]
@@ -191,6 +193,8 @@ class QuotePageEntry(BaseModel):
 class QuotePageResponse(BaseModel):
     quotes: List[QuotePageEntry]
     totalPages: int
+    currentPage: Optional[int] = None
+    totalItems: Optional[int] = None
 
 
 class QuotesTotalPagesResponse(BaseModel):
@@ -202,6 +206,22 @@ class AuthorResponse(BaseModel):
     name: str
     quotes: List[QuoteSimple]
     collections: List[CollectionSimple]
+
+
+# New model for an author entry in a list
+class AuthorEntry(BaseModel):
+    id: int
+    name: str
+    # bio: Optional[str] = None  # Add if available from DB
+    # avatar_url: Optional[str] = None # Add if available from DB
+
+
+# New model for paginated list of authors
+class PaginatedAuthorsResponse(BaseModel):
+    authors: List[AuthorEntry]
+    total_pages: int
+    current_page: Optional[int] = None
+    total_items: Optional[int] = None
 
 
 # Model for collection search results
