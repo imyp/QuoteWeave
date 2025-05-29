@@ -1,41 +1,192 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useEffect, useState } from 'react';
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { User, Edit3, Settings, Bookmark, BookOpen } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Edit3, Settings, Bookmark, BookOpen, LogIn, AlertTriangle, Loader2, PlusCircle } from "lucide-react";
 import Link from "next/link";
-import { mockUser } from "@/lib/user-utils"; // Import shared mock user
+import { useAuth } from "@/lib/auth";
 
-// Mock data for user's content (simplified)
-const mockUserQuotes = [
-  { id: "q1", text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
-  { id: "q2", text: "Strive not to be a success, but rather to be of value.", author: "Albert Einstein" },
-];
+// Import from lib/api.ts
+import {
+  getCurrentUserProfile,
+  getMyQuotes,
+  getMyCollections,
+  UserProfileResponse,
+  BackendQuote,
+  CollectionEntry
+} from "@/lib/api";
 
-const mockUserCollections = [
-  { id: "c1", name: "Stoic Wisdom", quoteCount: 15 },
-  { id: "c2", name: "Entrepreneurial Insights", quoteCount: 28 },
-];
+// Re-added DisplayQuote interface
+interface DisplayQuote {
+  id: number;
+  text: string;
+}
 
 export default function UserProfilePage() {
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
+  const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
+  const [userQuotes, setUserQuotes] = useState<DisplayQuote[]>([]);
+  const [userCollections, setUserCollections] = useState<CollectionEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authIsLoading) {
+      setIsLoading(true);
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setError("Please log in to view your profile.");
+      setIsLoading(false);
+      // Ensure userProfile is null if not authenticated
+      setUserProfile(null);
+      setUserQuotes([]);
+      setUserCollections([]);
+      return;
+    }
+
+    if (!authToken) {
+        setError("Authentication token not found. Please log in again.");
+        setIsLoading(false);
+        // Ensure userProfile is null if token is missing
+        setUserProfile(null);
+        setUserQuotes([]);
+        setUserCollections([]);
+        return;
+    }
+
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const profileData = await getCurrentUserProfile(authToken);
+        setUserProfile(profileData);
+
+        try {
+          const quotesResponse = await getMyQuotes(authToken);
+          if (quotesResponse && quotesResponse.quotes) {
+            const displayQuotes = quotesResponse.quotes.map((bq: BackendQuote): DisplayQuote => ({
+              id: bq.id,
+              text: bq.text,
+            }));
+            setUserQuotes(displayQuotes);
+          } else {
+            setUserQuotes([]);
+          }
+        } catch (quotesError) {
+          console.warn("Failed to fetch user quotes:", quotesError);
+          setUserQuotes([]);
+        }
+
+        try {
+          const collectionsData = await getMyCollections(authToken);
+          setUserCollections(collectionsData || []);
+        } catch (collectionsError) {
+          console.warn("Failed to fetch user collections:", collectionsError);
+          setUserCollections([]);
+        }
+
+      } catch (err) {
+        console.error("Error fetching profile data:", err);
+        setError((err instanceof Error ? err.message : String(err)) || "An unknown error occurred.");
+        setUserProfile(null);
+        setUserQuotes([]);
+        setUserCollections([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [authToken, isAuthenticated, authIsLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading profile...</p>
+      </div>
+    );
+  }
+
+  // Error state specifically when userProfile is null (critical error or not logged in)
+  if (error && !userProfile) {
+    return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
+        <Alert variant="destructive" className="max-w-lg">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertTitle>Error Loading Profile</AlertTitle>
+          <AlertDescription>
+            {error}
+            {(!isAuthenticated && !authIsLoading) && (
+              <Button asChild className="mt-4 w-full">
+                <Link href="/login"> <LogIn className="mr-2 h-4 w-4"/>Please Log In</Link>
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  // If auth is resolved, user is not authenticated, and there was no preceding critical error
+  if (!authIsLoading && !isAuthenticated) {
+     return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
+        <Alert variant="default" className="max-w-lg">
+          <LogIn className="h-5 w-5" />
+          <AlertTitle>Profile Access</AlertTitle>
+          <AlertDescription>
+            Please log in to view your profile and manage your quotes and collections.
+            <Button asChild className="mt-4 w-full">
+              <Link href="/login"> <LogIn className="mr-2 h-4 w-4"/>Proceed to Login</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  // If execution reaches here, userProfile should be available if authenticated.
+  // Add a specific check for userProfile for robustness before rendering profile data.
+  if (!userProfile) {
+    // This case should ideally be covered by error or login prompts above.
+    // But if it somehow occurs, show a generic message or redirect.
+    return (
+        <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex items-center justify-center">
+            <Alert variant="default">
+                <AlertTriangle className="h-5 w-5" />
+                <AlertTitle>Profile Not Available</AlertTitle>
+                <AlertDescription>
+                    Your profile data could not be loaded. Please try logging in again or contact support if the issue persists.
+                     <Button asChild className="mt-4 w-full">
+                        <Link href="/login"> <LogIn className="mr-2 h-4 w-4"/>Login</Link>
+                    </Button>
+                </AlertDescription>
+            </Alert>
+        </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)]">
       <Card className="w-full bg-card/80 backdrop-blur-sm shadow-xl overflow-hidden">
         <CardHeader className="p-6 bg-muted/30 border-b border-border">
           <div className="flex items-start space-x-6">
             <Avatar className="h-24 w-24 border-2 border-primary/50 shadow-md">
-              <AvatarImage src={mockUser.avatarUrl} alt={mockUser.username} />
               <AvatarFallback className="text-3xl">
-                {mockUser.username?.charAt(0).toUpperCase()}
-                {mockUser.username?.split(' ')?.[1]?.charAt(0).toUpperCase() || mockUser.username?.charAt(1).toUpperCase()}
+                {userProfile.username?.charAt(0).toUpperCase()}
+                {userProfile.username?.includes(' ') ? userProfile.username?.split(' ')?.[1]?.charAt(0).toUpperCase() : userProfile.username?.charAt(1)?.toUpperCase() || ''}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 pt-2">
-              <CardTitle className="text-3xl font-bold tracking-tight text-primary">{mockUser.username}</CardTitle>
-              <CardDescription className="text-muted-foreground mt-1 text-base">{mockUser.email}</CardDescription>
-              <p className="text-sm text-muted-foreground mt-2">{mockUser.joinedDate}</p>
+              <CardTitle className="text-3xl font-bold tracking-tight text-primary">{userProfile.username}</CardTitle>
+              <CardDescription className="text-muted-foreground mt-1 text-base">{userProfile.email}</CardDescription>
               <Link href="/profile/edit" passHref>
                 <Button variant="outline" size="sm" className="mt-4 text-xs">
                   <Edit3 className="mr-2 h-3 w-3" /> Edit Profile
@@ -48,76 +199,88 @@ export default function UserProfilePage() {
               </Button>
             </Link>
           </div>
-          {mockUser.bio && (
-            <div className="mt-6 pt-4 border-t border-border/50">
-              <p className="text-sm text-foreground/90 leading-relaxed">{mockUser.bio}</p>
-            </div>
-          )}
         </CardHeader>
 
         <CardContent className="p-6 space-y-8">
           <div>
-            <Link href="/profile/quotes" passHref>
-              <h2 className="text-2xl font-semibold text-primary mb-4 flex items-center cursor-pointer hover:underline">
-                <Bookmark className="mr-3 h-6 w-6" /> My Quotes
-              </h2>
-            </Link>
-            {mockUserQuotes.length > 0 ? (
+            <div className="flex justify-between items-center">
+              <Link href="/profile/quotes" passHref>
+                <h2 className="text-2xl font-semibold text-primary mb-4 flex items-center cursor-pointer hover:underline">
+                  <Bookmark className="mr-3 h-6 w-6" /> My Quotes ({userQuotes.length})
+                </h2>
+              </Link>
+              <Link href="/quotes/new" passHref>
+                  <Button variant="outline" size="sm" className="text-xs">
+                      <PlusCircle className="mr-2 h-3.5 w-3.5" /> Add Quote
+                  </Button>
+              </Link>
+            </div>
+            {userQuotes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {mockUserQuotes.map((quote) => (
+                {userQuotes.slice(0, 4).map((quote) => (
                   <Link key={quote.id} href={`/quotes/${quote.id}`} passHref>
                     <Card className="bg-background/70 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col group hover:border-primary/30 border border-transparent">
                       <CardContent className="p-4 flex-grow">
-                        <blockquote className="text-sm italic text-foreground/90 group-hover:text-primary transition-colors">&ldquo;{quote.text}&rdquo;</blockquote>
+                        <blockquote className="text-sm italic text-foreground/90 group-hover:text-primary transition-colors truncate-3-lines">
+                          &ldquo;{quote.text}&rdquo;
+                        </blockquote>
                       </CardContent>
-                      <CardFooter className="p-3 pt-2 text-xs text-muted-foreground border-t border-border/50">
-                        - {quote.author}
-                      </CardFooter>
                     </Card>
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No quotes added yet.</p>
+              <p className="text-muted-foreground">No quotes added yet. <Link href="/quotes/new" className="text-primary hover:underline">Add your first quote!</Link></p>
             )}
-            <div className="mt-4 text-right">
-              <Link href="/profile/quotes" passHref>
-                <Button variant="link" className="text-primary text-sm">View All Quotes</Button>
-              </Link>
-            </div>
+            {userQuotes.length > 0 && (
+                <div className="mt-4 text-right">
+                <Link href="/profile/quotes" passHref>
+                    <Button variant="link" className="text-primary text-sm">View All My Quotes</Button>
+                </Link>
+                </div>
+            )}
           </div>
 
           <Separator />
 
           <div>
-            <Link href="/profile/collections" passHref>
-              <h2 className="text-2xl font-semibold text-primary mb-4 flex items-center cursor-pointer hover:underline">
-                <BookOpen className="mr-3 h-6 w-6" /> My Collections
-              </h2>
-            </Link>
-            {mockUserCollections.length > 0 ? (
+            <div className="flex justify-between items-center">
+              <Link href="/profile/collections" passHref>
+                <h2 className="text-2xl font-semibold text-primary mb-4 flex items-center cursor-pointer hover:underline">
+                  <BookOpen className="mr-3 h-6 w-6" /> My Collections ({userCollections.length})
+                </h2>
+              </Link>
+              <Link href="/collections/new" passHref>
+                  <Button variant="outline" size="sm" className="text-xs">
+                      <PlusCircle className="mr-2 h-3.5 w-3.5" /> Create Collection
+                  </Button>
+              </Link>
+            </div>
+            {userCollections.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {mockUserCollections.map((collection) => (
+                {userCollections.slice(0, 4).map((collection) => (
                   <Link key={collection.id} href={`/collections/${collection.id}`} passHref>
                     <Card className="bg-background/70 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col group hover:border-primary/30 border border-transparent">
                       <CardHeader className="p-4 pb-2">
-                        <CardTitle className="text-base font-semibold text-foreground/90 group-hover:text-primary transition-colors">{collection.name}</CardTitle>
+                        <CardTitle className="text-base font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">{collection.name}</CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0 flex-grow">
-                        <p className="text-xs text-muted-foreground">{collection.quoteCount} quotes</p>
+                        <p className="text-xs text-muted-foreground">{collection.quoteCount || 0} quotes</p>
                       </CardContent>
                     </Card>
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No collections created yet.</p>
+              <p className="text-muted-foreground">No collections created yet. <Link href="/collections/new" className="text-primary hover:underline">Create a new collection!</Link></p>
             )}
-             <div className="mt-4 text-right">
-              <Link href="/profile/collections" passHref>
-                <Button variant="link" className="text-primary text-sm">View All Collections</Button>
-              </Link>
-            </div>
+            {userCollections.length > 0 && (
+                <div className="mt-4 text-right">
+                <Link href="/profile/collections" passHref>
+                    <Button variant="link" className="text-primary text-sm">View All My Collections</Button>
+                </Link>
+                </div>
+            )}
           </div>
         </CardContent>
 

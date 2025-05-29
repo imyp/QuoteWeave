@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -8,62 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { PlusCircle, Terminal, Loader2, Sparkles } from "lucide-react"
+import { PlusCircle, Terminal, Loader2, Sparkles, LogIn } from "lucide-react"
+import { useAuth } from "@/lib/auth";
 
-interface NewQuotePayload {
-  text: string;
-  authorName: string;
-  tags?: string[];
-  collectionIds?: string[];
-  isPublic?: boolean;
-}
-
-async function submitNewQuote(payload: NewQuotePayload): Promise<{ id: string } | { error: string }> {
-  console.log("API CALL (mock): Submitting new quote:", payload);
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  if (payload.text && payload.authorName) {
-    if (payload.text.toLowerCase().includes("fail")) {
-        return { error: "Quote submission failed due to server validation: 'fail' keyword detected." };
-    }
-    return { id: `quote${Math.floor(Math.random() * 1000) + 50}` };
-  } else {
-    return { error: "Quote text and author name are required." };
-  }
-}
-
-// Simple client-side tag generator
-function generateTagsFromText(text: string): string[] {
-  if (!text.trim()) return [];
-  const commonWords = new Set([
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'can',
-    'could', 'may', 'might', 'must', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
-    'in', 'on', 'at', 'by', 'from', 'to', 'with', 'about', 'above', 'after',
-    'again', 'against', 'all', 'am', 'as', 'it', 'its', 'itself', 'let\'s', 'me',
-    'more', 'most', 'my', 'myself', 'no', 'not', 'of', 'off', 'once', 'only', 'other', 'ought',
-    'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'he', 'him', 'his', 'her',
-    'hers', 'herself', 'himself', 'that', 'those', 'then', 'there', 'these',
-    'they', 'this', 'through', 'thus', 'too', 'under', 'until', 'up', 'very', 'what',
-    'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'how', 'i', 'you', 'your', 'yours'
-  ]);
-
-  const words = text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '') // Remove punctuation
-    .split(/\s+/); // Split by spaces
-
-  const potentialTags = words
-    .filter(word => word.length > 3 && !commonWords.has(word))
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1)); // Capitalize
-
-  // Get unique tags and limit to a few (e.g., 5)
-  const uniqueTags = Array.from(new Set(potentialTags));
-  return uniqueTags.slice(0, Math.min(uniqueTags.length, 5));
-}
+// Import the actual API call function and payload type
+import { createQuote, CreateQuoteClientPayload, generateTagsForQuote, GenerateTagsPayload } from '@/lib/api';
 
 export default function NewQuotePage() {
   const router = useRouter();
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
+
   const [text, setText] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [tags, setTags] = useState('');
@@ -72,48 +26,116 @@ export default function NewQuotePage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!authIsLoading && !isAuthenticated) {
+      router.push('/login?message=Please log in to create a new quote.');
+    }
+  }, [authIsLoading, isAuthenticated, router]);
+
   const handleGenerateTags = async () => {
     if (!text.trim()) {
       setError("Please enter some quote text first to generate tags.");
       setTimeout(() => setError(null), 3000);
       return;
     }
+    if (!authorName.trim()) {
+      setError("Please enter the author\'s name to help generate relevant tags.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    if (!isAuthenticated) {
+        setError("Please log in to use the AI tag generator.");
+        return;
+    }
     setIsGeneratingTags(true);
-    // Simulate a slight delay for UX, as if an API call was made
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const suggestedTags = generateTagsFromText(text);
-    setTags(suggestedTags.join(', '));
-    setIsGeneratingTags(false);
+    setError(null);
+    try {
+      const payload: GenerateTagsPayload = { quote: text, author: authorName };
+      const suggestedTags: string[] = await generateTagsForQuote(payload);
+
+      if (suggestedTags && suggestedTags.length > 0) {
+        const currentTagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
+        const combinedTags = Array.from(new Set([...currentTagsArray, ...suggestedTags]));
+        const newTagsString = combinedTags.slice(0, 7).join(', ');
+        setTags(newTagsString);
+      } else {
+        // Optional: setError("AI couldn't suggest any tags for this quote.");
+      }
+    } catch (err) {
+      console.error("Failed to generate tags:", err);
+      setError((err instanceof Error ? err.message : String(err)) || "Failed to generate tags.");
+    } finally {
+      setIsGeneratingTags(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isAuthenticated || !authToken) {
+        setError("You must be logged in to create a quote. Authentication token is missing.");
+        setIsSubmitting(false);
+        return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
 
-    const payload: NewQuotePayload = {
+    const processedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0 && tag.length <= 50);
+    if (processedTags.length > 7) {
+        setError("You can add a maximum of 7 tags.");
+        setIsSubmitting(false);
+        return;
+    }
+
+    const payload: CreateQuoteClientPayload = {
       text,
       authorName,
-      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0),
-      isPublic: true,
+      tags: processedTags,
     };
 
-    const result = await submitNewQuote(payload);
-
-    if ('id' in result) {
-      setSuccessMessage(`Quote successfully created! ID: ${result.id}. Redirecting...`);
+    try {
+      const newQuote = await createQuote(payload, authToken);
+      setSuccessMessage(`Quote successfully created! ID: ${newQuote.id}. Redirecting...`);
       setTimeout(() => {
-        router.push(`/quotes/${result.id}`);
+        router.push(`/quotes/${newQuote.id}`);
       }, 2000);
       setText('');
       setAuthorName('');
       setTags('');
-    } else {
-      setError(result.error || "An unexpected error occurred.");
+    } catch (err) {
+      console.error("Failed to submit new quote:", err);
+      setError((err instanceof Error ? err.message : String(err)) || "An unexpected error occurred.");
     }
     setIsSubmitting(false);
   };
+
+  if (authIsLoading || (!isAuthenticated && !error && !successMessage)) {
+    return (
+        <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="mt-4 text-muted-foreground">Loading page...</p>
+        </div>
+    );
+  }
+
+  if (!isAuthenticated && error) {
+     return (
+      <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
+        <Alert variant="destructive" className="max-w-md">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
+          <AlertDescription>
+            {error}
+          </AlertDescription>
+          <Button onClick={() => router.push('/login')} className="mt-4 w-full">
+            <LogIn className="mr-2 h-4 w-4" /> Login
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-12 flex justify-center min-h-[calc(100vh-4rem)]">
@@ -137,6 +159,7 @@ export default function NewQuotePage() {
                 required
                 rows={5}
                 className="text-base resize-none"
+                disabled={isSubmitting || !isAuthenticated}
               />
             </div>
             <div className="space-y-2">
@@ -149,17 +172,18 @@ export default function NewQuotePage() {
                 placeholder="e.g., Socrates"
                 required
                 className="text-base"
+                disabled={isSubmitting || !isAuthenticated}
               />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label htmlFor="tags" className="text-base">Tags (comma-separated)</Label>
+                <Label htmlFor="tags" className="text-base">Tags (comma-separated, up to 7)</Label>
                 <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={handleGenerateTags}
-                    disabled={isGeneratingTags || !text.trim()}
+                    disabled={isGeneratingTags || !text.trim() || !authorName.trim() || isSubmitting || !isAuthenticated}
                     className="text-xs tracking-wide"
                 >
                   {isGeneratingTags ? (
@@ -167,7 +191,7 @@ export default function NewQuotePage() {
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Generate
+                  Generate Tags (AI)
                 </Button>
               </div>
               <Input
@@ -175,16 +199,17 @@ export default function NewQuotePage() {
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                placeholder="e.g., wisdom, philosophy, life"
+                placeholder="e.g., wisdom, philosophy, life (max 7 tags)"
                 className="text-base mt-1"
+                disabled={isSubmitting || !isAuthenticated}
               />
               <p className="text-xs text-muted-foreground pt-1">
-                Help others discover your quote by adding relevant tags, or auto-generate them based on the quote text.
+                Help others discover your quote by adding relevant tags (max 7, up to 50 chars each), or use the AI generator.
               </p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4 px-6 pb-8 pt-6 border-t border-border/50">
-            {error && (
+            {error && (!successMessage) && (
               <Alert variant="destructive" className="w-full">
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>Submission Error</AlertTitle>
@@ -198,7 +223,7 @@ export default function NewQuotePage() {
                 <AlertDescription className="!text-green-600 dark:!text-green-300">{successMessage}</AlertDescription>
               </Alert>
             )}
-            <Button type="submit" className="w-full text-base py-3" disabled={isSubmitting}>
+            <Button type="submit" className="w-full text-base py-3" disabled={isSubmitting || isGeneratingTags || !isAuthenticated}>
               {isSubmitting ? (
                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Submitting...</>
               ) : (

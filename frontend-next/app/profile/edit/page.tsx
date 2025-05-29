@@ -8,71 +8,129 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, CheckCircle, Loader2, Save, Terminal, UserCog } from "lucide-react";
+import { ArrowLeft, CheckCircle, Loader2, Save, Terminal, UserCog, LogIn } from "lucide-react";
 import Link from 'next/link';
-import { mockUser } from "@/lib/user-utils"; // Import shared mock user
+import { useAuth } from "@/lib/auth";
+import {
+  getCurrentUserProfile,
+  updateUserProfile,
+  UpdateUserProfilePayload
+} from '@/lib/api';
 
-// Mock API function for updating profile
-async function updateUserProfile(payload: { username: string; email: string; bio: string }): Promise<{ success: boolean; message: string; error?: string }> {
-  console.log("API CALL (mock): Updating profile with:", payload);
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-
-  // Simulate potential errors
-  if (payload.username.toLowerCase().includes("error")) {
-    return { success: false, message: "Failed to update profile. Username is invalid.", error: "invalid_username" };
-  }
-  if (payload.email === "taken@example.com"){
-    return { success: false, message: "This email is already taken.", error: "email_taken" };
-  }
-
-  // Update THE SHARED mockUser data
-  mockUser.username = payload.username;
-  mockUser.email = payload.email;
-  mockUser.bio = payload.bio;
-
-  return { success: true, message: "Profile updated successfully!" };
-}
 
 export default function EditProfilePage() {
   const router = useRouter();
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
+
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(false); // For form submission
+  const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Pre-fill form with current user data from SHARED mockUser
-    setUsername(mockUser.username);
-    setEmail(mockUser.email);
-    setBio(mockUser.bio);
-  }, []);
+    if (authIsLoading) {
+      setIsFetchingInitialData(true);
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setError("Please log in to edit your profile.");
+      setIsFetchingInitialData(false);
+      // router.push('/login'); // Optionally redirect immediately
+      return;
+    }
+
+    if (!authToken) {
+        setError("Authentication token not found. Please log in again.");
+        setIsFetchingInitialData(false);
+        return;
+    }
+
+    setIsFetchingInitialData(true);
+    getCurrentUserProfile(authToken)
+      .then(profile => {
+        if (profile) {
+            setUsername(profile.username);
+            setEmail(profile.email);
+            // Bio is not part of UserProfileResponse. Assuming it's a local or separate state.
+            // setBio(profile.bio || '');
+        }
+      })
+      .catch(err => {
+        console.error("Failed to fetch user profile:", err);
+        setError("Could not load your profile data. Please try again or log in.");
+      })
+      .finally(() => setIsFetchingInitialData(false));
+  }, [authToken, isAuthenticated, authIsLoading, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isAuthenticated || !authToken) {
+        setError("You must be logged in to update your profile. Token is missing.");
+        return;
+    }
+
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
 
-    const result = await updateUserProfile({ username, email, bio });
+    try {
+      const payload: UpdateUserProfilePayload = { username, email };
+      // If bio were part of the backend UpdateUserProfilePayload, you would include it:
+      // payload.bio = bio; // Example if bio was a field in UpdateUserProfilePayload
 
-    if (result.success) {
-      setSuccessMessage(result.message);
+      const updatedProfile = await updateUserProfile(payload, authToken);
+      setSuccessMessage("Profile updated successfully!");
+      setUsername(updatedProfile.username);
+      setEmail(updatedProfile.email);
+      // setBio if it were part of the response and payload
+
       setTimeout(() => {
-        router.push('/profile'); // Redirect to profile page on success
+        router.push('/profile');
       }, 1500);
-    } else {
-      setError(result.message);
+    } catch (err) {
+      setError((err instanceof Error ? err.message : String(err)) || "An unexpected error occurred.");
     }
     setIsLoading(false);
   };
+
+  if (isFetchingInitialData || authIsLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading your profile...</p>
+      </div>
+    );
+  }
+
+  // If finished loading initial data and not authenticated, or critical error during fetch
+  if ((!authIsLoading && !isAuthenticated) || (error && !username && !email) ){
+     return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>{error ? "Error Loading Profile" : "Authentication Required"}</AlertTitle>
+          <AlertDescription>
+            {error || "Please log in to edit your profile."}
+          </AlertDescription>
+          <Button onClick={() => router.push('/login')} className="mt-4">
+            <LogIn className="mr-2 h-4 w-4" /> Login
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl min-h-[calc(100vh-4rem)]">
        <div className="mb-6">
         <Link href="/profile" passHref>
-          <Button variant="outline" size="sm" className="text-sm">
+          <Button variant="outline" size="sm" className="text-sm" disabled={isLoading}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Profile
           </Button>
@@ -99,6 +157,7 @@ export default function EditProfilePage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 className="bg-input/70 text-base"
+                disabled={isLoading}
               />
             </div>
             <div className="grid gap-2">
@@ -111,10 +170,11 @@ export default function EditProfilePage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-input/70 text-base"
+                disabled={isLoading}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="bio">Bio</Label>
+              <Label htmlFor="bio">Bio (Optional)</Label>
               <Textarea
                 id="bio"
                 placeholder="Tell us a little about yourself..."
@@ -122,6 +182,7 @@ export default function EditProfilePage() {
                 onChange={(e) => setBio(e.target.value)}
                 className="bg-input/70 text-base min-h-[100px]"
                 rows={4}
+                disabled={isLoading}
               />
             </div>
             {error && (

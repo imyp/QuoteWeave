@@ -1,11 +1,12 @@
+from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from psycopg import Connection
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 
 import app.crud as crud
@@ -44,6 +45,25 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep) -> model.User:
 CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
 
 
+async def get_optional_current_user(
+    conn: ConnectionDep, token: Optional[TokenDep] = None
+) -> Optional[model.User]:
+    if token is None:
+        return None
+    try:
+        return await get_current_user(conn, token)
+    except HTTPException as e:
+        # If token is invalid or user not found, treat as anonymous for this optional case
+        if e.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise  # Re-raise other exceptions
+
+
+OptionalCurrentUserDep = Annotated[
+    Optional[model.User], Depends(get_optional_current_user)
+]
+
+
 async def get_current_active_user(
     current_user_internal: CurrentUserDep,
 ) -> model.UserResponse:
@@ -62,18 +82,39 @@ CurrentUserResponseDep = Annotated[
     model.UserResponse, Depends(get_current_active_user)
 ]
 
-app = FastAPI()
+
+# Define the lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    print("Application startup via lifespan...")
+    try:
+        embedding.load_embedding_model()
+        print(
+            "Embedding model loaded successfully or already available via lifespan."
+        )
+    except RuntimeError as e:
+        print(
+            f"Critical error: Could not load embedding model on startup via lifespan: {e}"
+        )
+
+    try:
+        embedding.load_quotes_and_generate_embeddings()
+        print(
+            f"Mock quotes processing complete via lifespan. {len(embedding.CSV_QUOTES_DATA)} quotes loaded."
+        )
+    except Exception as e:
+        print(
+            f"Warning: Error loading mock quotes or generating embeddings on startup via lifespan: {e}"
+        )
+
+    print("Startup via lifespan finished.")
+    yield
+    # Shutdown logic (if any) would go here
+    print("Application shutdown via lifespan...")
 
 
-@app.on_event("startup")
-async def startup_event():
-    print("Application startup...")
-    # Tagging model is lazy-loaded by tagging.py
-    # Embedding model is lazy-loaded by embedding.py
-    # Explicitly load them here if desired for immediate availability / error checking at start
-    # tagging.load_model() # Already lazy-loaded
-    # embedding.load_embedding_model() # Already lazy-loaded
-    print("ML models are configured for lazy loading.")
+app = FastAPI(title="QuoteWeave API", version="0.1.0", lifespan=lifespan)
 
 
 class TaggingRequest(BaseModel):
@@ -83,7 +124,11 @@ class TaggingRequest(BaseModel):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -145,15 +190,98 @@ async def current_user_endpoint(current_user_resp: CurrentUserResponseDep):
     return current_user_resp
 
 
+@app.put("/users/me", response_model=model.UserResponse)
+async def update_current_user_profile_endpoint(
+    conn: ConnectionDep,
+    payload: model.UpdateUserProfilePayload,
+    current_user: CurrentUserDep,
+):
+    try:
+        updated_user = crud.update_user_profile(conn, current_user.id, payload)
+        return updated_user
+    except ValueError as e:
+        # Handle specific errors like username/email taken, or general update failure
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        # Log generic server errors
+        # logger.error(f"Error updating profile for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while updating profile.",
+        )
+
+
+@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_current_user_password(
+    conn: ConnectionDep,
+    payload: model.ChangePasswordPayload,
+    current_user: CurrentUserDep,  # Ensures user is authenticated
+):
+    try:
+        success = crud.update_user_password(conn, current_user.id, payload)
+        if not success:
+            # This case might occur if rowcount is 0 for some unexpected reason
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password could not be updated.",
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    return
+
+
+@app.put("/users/me/preferences", response_model=model.UserResponse)
+async def update_current_user_preferences(
+    conn: ConnectionDep,
+    payload: model.UpdateUserProfilePayload,
+    current_user: CurrentUserDep,  # Ensures user is authenticated
+):
+    try:
+        # The CRUD function currently mocks DB update and returns existing user info.
+        # When DB schema is updated, this will reflect actual changes.
+        updated_user_response = crud.update_user_preferences(
+            conn, current_user.id, payload
+        )
+        return updated_user_response
+    except ValueError as e:
+        # e.g., if user not found in crud despite being authenticated (should not happen)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        )
+
+
 @app.get("/quotes/page/{page_number}", response_model=model.QuotePageResponse)
-async def get_quotes_page(conn: ConnectionDep, page_number: int):
-    quotes = crud.get_quotes_for_page(conn, 20, page_number)
-    return model.QuotePageResponse(quotes=quotes)
+async def get_quotes_page(
+    conn: ConnectionDep, page_number: int, current_user: OptionalCurrentUserDep
+):
+    user_id = current_user.id if current_user else None
+    # Ensure the page_size matches what frontend expects (e.g., 9 or configurable)
+    # The crud function was updated to use page_size, but here it's hardcoded to 20 in the call.
+    # Let's assume page_size is 9 for now as per frontend constant.
+    # We should ideally pass page_size from frontend or define it consistently.
+    quotes_page_entries = crud.get_quotes_for_page(
+        conn, page_size=9, page_number=page_number, current_user_id=user_id
+    )
+
+    # Need total pages for the response. The model.QuotePageResponse currently only has `quotes`.
+    # It should have `totalPages` too as per frontend lib/api.ts
+    # Let's modify QuotePageResponse model or how it's constructed.
+    # For now, fetching total pages separately.
+    total_pages = crud.get_quotes_total_pages(conn, page_size=9)
+
+    return model.QuotePageResponse(
+        quotes=quotes_page_entries, totalPages=total_pages
+    )
 
 
 @app.get("/quotes/get-n-pages", response_model=model.QuotesTotalPagesResponse)
 async def get_quotes_total_pages(conn: ConnectionDep):
-    n_pages = crud.get_quotes_total_pages(conn, 20)
+    # This needs to be consistent with page_size used in get_quotes_page
+    n_pages = crud.get_quotes_total_pages(conn, page_size=9)  # Assuming 9
     return model.QuotesTotalPagesResponse(n_pages=n_pages)
 
 
@@ -167,33 +295,117 @@ async def current_quotes(conn: ConnectionDep, current_user: CurrentUserDep):
     return model.QuoteCollection(quotes=quotes)
 
 
-@app.post("/quotes/create", response_model=model.Quote)
-async def create_quote(
-    conn: ConnectionDep,
-    current_user_dep: CurrentUserDep,
-    quote_content: str = Query(
-        ..., min_length=1, description="Content of the quote"
-    ),
+@app.get("/quotes/{quote_id}", response_model=Optional[model.QuotePageEntry])
+async def get_quote_by_id_endpoint(
+    quote_id: int, conn: ConnectionDep, current_user: OptionalCurrentUserDep
 ):
-    if current_user_dep.author_id is None:
-        raise HTTPException(
-            status_code=403,
-            detail="User not associated with an author to create a quote.",
-        )
-
-    author = crud.get_author_by_id(conn, current_user_dep.author_id)
-    if not author:
-        raise HTTPException(
-            status_code=404, detail="Author for current user not found."
-        )
-
-    query = model.CreateQuoteQuery(
-        author_id=current_user_dep.author_id,
-        text=quote_content,
-        is_public=True,
+    user_id = current_user.id if current_user else None
+    quote = crud.get_quote_details_for_page_entry(
+        conn, quote_id=quote_id, current_user_id=user_id
     )
-    new_quote = crud.create_quote(conn, query, author_name=author.name)
-    return new_quote
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return quote
+
+
+@app.post(
+    "/quotes/create",
+    response_model=model.QuotePageEntry,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_quote(
+    payload: model.CreateQuoteClientPayload,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    if current_user.id is None:  # Should not happen if CurrentUserDep works
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not authenticated.",
+        )
+    try:
+        # Note: create_quote_with_client_payload expects user_id for now, not author_id
+        # This might need adjustment based on how user's ability to create quotes is tied to authors
+        # For now, passing current_user.id. The CRUD can internally decide if this user can act as an author or create one.
+        new_quote_page_entry = crud.create_quote_with_client_payload(
+            conn, payload=payload, user_id=current_user.id
+        )
+        return new_quote_page_entry
+    except ValueError as e:
+        # Specific error for duplicate or invalid data can be handled here
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Log e
+        raise HTTPException(status_code=500, detail="Failed to create quote.")
+
+
+@app.put("/quotes/{quote_id}", response_model=model.QuotePageEntry)
+async def update_quote_endpoint(
+    quote_id: int,
+    payload: model.UpdateQuoteClientPayload,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    if current_user.author_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with an author, cannot update quotes.",
+        )
+    try:
+        updated_quote = crud.update_quote_with_client_payload(
+            conn,
+            quote_id=quote_id,
+            payload=payload,
+            user_author_id=current_user.author_id,
+        )
+        if updated_quote is None:
+            raise HTTPException(
+                status_code=404, detail="Quote not found or not updated."
+            )
+        return updated_quote
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Log e
+        raise HTTPException(status_code=500, detail="Failed to update quote.")
+
+
+@app.delete("/quotes/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote_endpoint(
+    quote_id: int, conn: ConnectionDep, current_user: CurrentUserDep
+):
+    if current_user.author_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with an author, cannot delete quotes.",
+        )
+    try:
+        success = crud.delete_quote_for_user(
+            conn, quote_id=quote_id, user_author_id=current_user.author_id
+        )
+        if not success:
+            # This could mean quote not found, or already deleted.
+            # The CRUD function returns False for "not found".
+            # For "not authorized", it raises ValueError, caught below.
+            raise HTTPException(
+                status_code=404,
+                detail="Quote not found or could not be deleted.",
+            )
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        # Other ValueErrors from CRUD might indicate issues like "quote not found" if not handled by return value
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Log e
+        raise HTTPException(status_code=500, detail="Failed to delete quote.")
+    return  # For 204 No Content
 
 
 @app.get("/authors/{author_id}")
@@ -242,9 +454,25 @@ async def generate_tags_endpoint(request: TaggingRequest):
         )
 
 
+@app.get("/tags/all", response_model=List[model.TagEntry], tags=["Tags"])
+async def get_all_tags_with_counts_endpoint(conn: ConnectionDep):
+    """Retrieve all unique tags with their corresponding quote counts."""
+    try:
+        tags_with_counts = crud.get_all_unique_tags_with_counts(conn)
+        return tags_with_counts
+    except Exception as e:
+        # Log the exception e for debugging purposes
+        print(f"Error fetching all tags with counts: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve tags.",
+        )
+
+
 @app.get("/quotes/search/", response_model=List[model.QuotePageEntry])
 async def search_quotes_endpoint(
     conn: ConnectionDep,
+    current_user: OptionalCurrentUserDep,
     query: str = Query(
         ...,
         min_length=1,
@@ -263,8 +491,13 @@ async def search_quotes_endpoint(
         )
     try:
         query_embedding = embedding.generate_embedding(query)
+        user_id = current_user.id if current_user else None
         quotes = crud.search_quotes_semantic(
-            conn, query_embedding, limit=limit, skip=skip
+            conn,
+            query_embedding,
+            limit=limit,
+            skip=skip,
+            current_user_id=user_id,
         )
         return quotes
     except Exception as e:
@@ -272,3 +505,307 @@ async def search_quotes_endpoint(
         raise HTTPException(
             status_code=500, detail=f"Error during semantic search: {str(e)}"
         )
+
+
+# New endpoint to get all mock quotes
+@app.get(
+    "/api/v1/mock/quotes/all",
+    response_model=List[model.CSVMockQuote],
+    tags=["Mock Data"],
+)
+async def get_all_mock_quotes():
+    """Returns all quotes loaded from the CSV mock data file."""
+    if not embedding.CSV_QUOTES_DATA:
+        # This allows the app to be functional even if mock data isn't loaded
+        return []
+    return embedding.CSV_QUOTES_DATA
+
+
+# New endpoint for semantic search on mock quotes
+@app.get(
+    "/api/v1/mock/quotes/search",
+    response_model=List[model.CSVMockQuote],
+    tags=["Mock Data"],
+)
+async def search_mock_quotes_semantic(
+    query: str = Query(
+        ..., min_length=1, description="Search query for quotes"
+    ),
+    top_n: int = Query(
+        10, gt=0, le=50, description="Number of similar quotes to return"
+    ),
+):
+    """Performs semantic search for quotes based on the query using embeddings from mock data."""
+    if not embedding.CSV_QUOTES_DATA or embedding.CSV_QUOTE_EMBEDDINGS is None:
+        # Functional without mock data
+        # Or raise HTTPException(status_code=404, detail="Mock quote data not available for search.")
+        return []
+
+    results = embedding.search_similar_quotes(query_text=query, top_n=top_n)
+    return results
+
+
+# --- Favorite Endpoints --- START ---
+@app.post(
+    "/quotes/{quote_id}/favorite", status_code=status.HTTP_204_NO_CONTENT
+)
+async def favorite_a_quote(
+    quote_id: int, conn: ConnectionDep, current_user: CurrentUserDep
+):
+    # Check if quote exists
+    quote = crud.get_quote_by_id(conn, quote_id)
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found"
+        )
+
+    try:
+        crud.add_favorite(conn, current_user.id, quote_id)
+    except ValueError as e:
+        # This might happen if there's a DB issue, already logged in crud
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+    return
+
+
+@app.delete(
+    "/quotes/{quote_id}/favorite", status_code=status.HTTP_204_NO_CONTENT
+)
+async def unfavorite_a_quote(
+    quote_id: int, conn: ConnectionDep, current_user: CurrentUserDep
+):
+    # Check if quote exists (optional, as remove_favorite handles non-existence gracefully, but good for consistent 404)
+    quote = crud.get_quote_by_id(conn, quote_id)
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found"
+        )
+
+    try:
+        crud.remove_favorite(conn, current_user.id, quote_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+    return
+
+
+# --- Favorite Endpoints --- END ---
+
+
+# --- Collection Endpoints --- START ---
+@app.post(
+    "/collections/create",
+    response_model=model.Collection,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_new_collection(
+    collection_data: model.CreateCollectionClientPayload,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    if current_user.author_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with an author and cannot create collections.",
+        )
+
+    # Construct the full CreateCollectionQuery for the CRUD function
+    full_collection_data = model.CreateCollectionQuery(
+        name=collection_data.name,
+        description=collection_data.description,
+        is_public=collection_data.is_public,
+        author_id=current_user.author_id,  # Use author_id from authenticated user
+    )
+
+    try:
+        new_collection = crud.create_collection(conn, full_collection_data)
+        return new_collection
+    except ValueError as e:
+        if (
+            "unique constraint" in str(e).lower()
+            or "already exists" in str(e).lower()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A collection with the name '{full_collection_data.name}' already exists for this author.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        # Log e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while creating the collection.",
+        )
+
+
+@app.get("/collections/my", response_model=List[model.Collection])
+async def get_my_collections(
+    conn: ConnectionDep, current_user: CurrentUserDep
+):
+    if current_user.author_id is None:
+        # Or return empty list if user is not an author / has no collections
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with an author.",
+        )
+    collections = crud.get_collections_from_author(
+        conn, current_user.author_id
+    )
+    return collections
+
+
+@app.get("/collections/{collection_id}", response_model=model.Collection)
+async def get_single_collection(
+    collection_id: int,
+    conn: ConnectionDep,
+    current_user: OptionalCurrentUserDep,
+):
+    collection = crud.get_collection_by_id(conn, collection_id)
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Collection not found",
+        )
+
+    # If collection is not public, only the author can see it
+    if not collection.is_public:
+        if (
+            current_user is None
+            or current_user.author_id != collection.author_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this collection",
+            )
+    return collection
+
+
+@app.put("/collections/{collection_id}", response_model=model.Collection)
+async def update_existing_collection(
+    collection_id: int,
+    collection_data: model.UpdateCollectionQuery,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    if current_user.author_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with an author and cannot update collections.",
+        )
+    try:
+        updated_collection = crud.update_collection(
+            conn, collection_id, collection_data, current_user.author_id
+        )
+        if updated_collection is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Collection not found or user not authorized to update.",
+            )
+        return updated_collection
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        if "already exists" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(e)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        # Log e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while updating the collection.",
+        )
+
+
+@app.delete(
+    "/collections/{collection_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_existing_collection(
+    collection_id: int, conn: ConnectionDep, current_user: CurrentUserDep
+):
+    if current_user.author_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with an author and cannot delete collections.",
+        )
+    try:
+        success = crud.delete_collection_by_id(
+            conn, collection_id, current_user.author_id
+        )
+        if not success:
+            # This could mean not found or (less likely if ValueError not raised) not authorized from CRUD perspective
+            # For DELETE, if not found, it's often idempotent, so 204 is still okay.
+            # However, our CRUD raises ValueError for auth issues, which we catch.
+            # If it returns False, it means "not found".
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Collection not found.",
+            )
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        # Other ValueErrors could be more generic bad requests
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        # Log e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while deleting the collection.",
+        )
+
+
+# --- Collection Endpoints --- END ---
+
+
+# --- Collection Search Endpoint --- START ---
+@app.get(
+    "/api/v1/collections/search/",
+    response_model=List[model.CollectionEntry],
+    tags=["Collections Search"],
+)
+async def search_collections_endpoint(
+    conn: ConnectionDep,
+    query: str = Query(
+        ...,
+        min_length=1,
+        description="Text to search for in collection names and descriptions",
+    ),
+    limit: int = Query(
+        10, gt=0, le=100, description="Number of results to return"
+    ),
+    skip: int = Query(
+        0, ge=0, description="Number of results to skip for pagination"
+    ),
+):
+    if not query.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search query cannot be empty.",
+        )
+    try:
+        collections = crud.search_collections(
+            conn, search_term=query, limit=limit, skip=skip
+        )
+        return collections
+    except Exception as e:
+        # Log the exception e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error during collection search: {str(e)}",
+        )
+
+
+# --- Collection Search Endpoint --- END ---

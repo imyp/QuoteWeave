@@ -1,19 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getQuoteById, QuotePageEntry, favoriteQuote, unfavoriteQuote } from '@/lib/quote-utils';
+import { getQuoteById, QuotePageEntry, favoriteQuote, unfavoriteQuote } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { QuoteIcon, UserCircle, TagsIcon, Terminal, Edit2Icon, Heart, Loader2 } from "lucide-react";
+import { QuoteIcon, UserCircle, TagsIcon, Terminal, Edit2Icon, Heart, Loader2, LogIn } from "lucide-react";
 
 export default function QuoteDetailsPage() {
   const paramsFromHook = useParams();
-  const quoteId = paramsFromHook.quoteId as string;
+  const quoteIdString = paramsFromHook.quoteId as string;
   const router = useRouter();
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
 
   const [quote, setQuote] = useState<QuotePageEntry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,10 +23,24 @@ export default function QuoteDetailsPage() {
   const [isFavoriting, setIsFavoriting] = useState(false);
   const [animateHeart, setAnimateHeart] = useState(false);
 
-  const fetchQuoteDetails = () => {
+  const numericQuoteId = parseInt(quoteIdString, 10);
+
+  const fetchQuoteDetails = useCallback(() => {
+    if (isNaN(numericQuoteId)) {
+      setError("Invalid quote ID format.");
+      setIsLoading(false);
+      notFound();
+      return;
+    }
+
+    if (authIsLoading) {
+        setIsLoading(true);
+        return;
+    }
+
     setIsLoading(true);
     setError(null);
-    getQuoteById(quoteId)
+    getQuoteById(numericQuoteId, authToken)
       .then(data => {
         if (!data) {
           notFound();
@@ -33,51 +49,57 @@ export default function QuoteDetailsPage() {
         }
       })
       .catch(err => {
-        console.error(`Failed to load quote ${quoteId}:`, err);
+        console.error(`Failed to load quote ${numericQuoteId}:`, err);
         setError("Failed to load quote details. It might have been removed or an error occurred.");
       })
       .finally(() => setIsLoading(false));
-  };
+  }, [numericQuoteId, authToken, authIsLoading]);
 
   useEffect(() => {
-    if (!quoteId) return;
+    if (!quoteIdString) return;
     fetchQuoteDetails();
-  }, [quoteId]);
+  }, [quoteIdString, fetchQuoteDetails]);
 
   const handleFavoriteToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!quote) return;
 
+    if (!isAuthenticated) {
+        router.push('/login?message=Please log in to favorite quotes');
+        return;
+    }
+    if (!authToken) {
+        setError("Authentication token not found. Please log in again.");
+        return;
+    }
+
     setIsFavoriting(true);
     setAnimateHeart(true);
-    setTimeout(() => setAnimateHeart(false), 400);
+    setTimeout(() => setAnimateHeart(false), 600);
 
     try {
       const apiCall = quote.isFavorited ? unfavoriteQuote : favoriteQuote;
-      const result = await apiCall(quote.id);
-      if (result.success && result.data) {
-        setQuote(result.data);
-      }
+      await apiCall(quote.id, authToken);
+      setQuote(prevQuote => prevQuote ? {
+          ...prevQuote,
+          isFavorited: !prevQuote.isFavorited,
+          favoriteCount: prevQuote.isFavorited
+            ? (prevQuote.favoriteCount || 0) - 1
+            : (prevQuote.favoriteCount || 0) + 1
+      } : null);
     } catch (err) {
       console.error("Failed to update favorite status on details page", err);
+      setError("Could not update favorite status. Please try again.");
     } finally {
       setIsFavoriting(false);
     }
   };
 
-  if (isLoading && !quote) {
+  if (isLoading || authIsLoading && !quote && !error) {
     return (
-      <div className="container mx-auto px-4 py-12 flex justify-center min-h-[calc(100vh-8rem)]">
-        <div className="w-full max-w-2xl animate-pulse">
-          <div className="h-10 bg-muted rounded w-3/4 mb-6"></div>
-          <div className="h-24 bg-muted rounded mb-4"></div>
-          <div className="h-6 bg-muted rounded w-1/2 mb-6"></div>
-          <div className="flex gap-2">
-            <div className="h-8 w-20 bg-muted rounded-full"></div>
-            <div className="h-8 w-24 bg-muted rounded-full"></div>
-            <div className="h-8 w-16 bg-muted rounded-full"></div>
-          </div>
-        </div>
+      <div className="container mx-auto px-4 py-12 flex justify-center items-center min-h-[calc(100vh-8rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading quote...</p>
       </div>
     );
   }
@@ -123,7 +145,7 @@ export default function QuoteDetailsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push(`/quotes/${quoteId}/edit`)}
+              onClick={() => router.push(`/quotes/${quoteIdString}/edit`)}
               className="text-xs"
             >
               <Edit2Icon className="mr-1.5 h-3.5 w-3.5" /> Edit
@@ -147,13 +169,20 @@ export default function QuoteDetailsPage() {
                     size="lg"
                     className={`group/fav ${quote.isFavorited ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-red-500'}`}
                     onClick={handleFavoriteToggle}
-                    disabled={isFavoriting || isLoading}
+                    disabled={isFavoriting || isLoading || (!isAuthenticated && !authIsLoading) }
                 >
-                    {isFavoriting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className={`h-5 w-5 ${quote.isFavorited ? 'fill-current' : 'group-hover/fav:fill-red-500/30'} ${animateHeart ? 'animate-pulse-heart' : ''} transition-all`} />}
+                    {isFavoriting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className={`h-5 w-5 ${quote.isFavorited ? 'fill-current' : (isAuthenticated ? 'group-hover/fav:fill-red-500/30' : '')} ${animateHeart ? 'animate-pulse-heart' : ''} transition-all`} />}
                     <span className="sr-only">Favorite</span>
                 </Button>
                 <span className="text-base text-muted-foreground tabular-nums ml-2">{quote.favoriteCount || 0} favorites</span>
             </div>
+            {!isAuthenticated && !authIsLoading && (
+                <div className="mt-4 text-sm text-muted-foreground">
+                    <Link href="/login?message=Log in to favorite this quote" className="text-primary hover:underline flex items-center justify-center">
+                        <LogIn className="mr-1.5 h-4 w-4" /> Log in to Favorite
+                    </Link>
+                </div>
+            )}
           </div>
         </CardContent>
         {quote.tags && quote.tags.length > 0 && (

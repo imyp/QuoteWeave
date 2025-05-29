@@ -46,6 +46,7 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_quote_modtime ON quote;
 CREATE TRIGGER update_quote_modtime
     BEFORE UPDATE ON quote
     FOR EACH ROW
@@ -72,3 +73,15 @@ CREATE TABLE IF NOT EXISTS taggedas (
     FOREIGN KEY (tag_id) REFERENCES tag (id) ON DELETE CASCADE,
     PRIMARY KEY (quote_id, tag_id)
 );
+
+-- User-Quote Favorites Table
+CREATE TABLE IF NOT EXISTS user_quote_favorite (
+    user_id INTEGER NOT NULL,
+    quote_id INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, quote_id),
+    FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE,
+    FOREIGN KEY (quote_id) REFERENCES quote(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_quote_favorite_quote_id ON user_quote_favorite(quote_id);

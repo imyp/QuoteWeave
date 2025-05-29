@@ -9,19 +9,28 @@ export default function PrivacyPage() {
       </header>
 
       <section className="prose prose-lg dark:prose-invert max-w-3xl mx-auto">
-        <p>
-          Your privacy is important to us. It is QuoteWeave&apos;s policy to respect your privacy regarding any information we may collect from you across our website, <Link href="/" className="text-primary hover:underline">https://quoteweave.com</Link> (placeholder), and other sites we own and operate.
+        <p className="mb-4 text-muted-foreground">
+          At QuoteWeave, we are committed to protecting your privacy. This Privacy Policy outlines how we collect,
+          use, disclose, and safeguard your information when you use our platform. Please read this policy carefully.
+          If you do not agree with the terms of this privacy policy, please do not access the site.
+        </p>
+        <p className="mb-4 text-muted-foreground">
+          We reserve the right to make changes to this Privacy Policy at any time and for any reason.
+          We will alert you about any changes by updating the &ldquo;Last Updated&rdquo; date of this Privacy Policy.
+          You are encouraged to periodically review this Privacy Policy to stay informed of updates. You will be
+          deemed to have been made aware of, will be subject to, and will be deemed to have accepted the changes in any
+          revised Privacy Policy by your continued use of the Application after the date such revised Privacy Policy is posted.
         </p>
 
         <h2 className="text-2xl font-semibold text-foreground mt-8">1. Information We Collect</h2>
         <p>
-          We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent. We also let you know why we're collecting it and how it will be used.
+          We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent. We also let you know why we&apos;re collecting it and how it will be used.
         </p>
         <p>
           Information we collect may include:
         </p>
         <ul>
-          <li>Log data: Like most website operators, we collect information that your browser sends whenever you visit our Service. This Log Data may include information such as your computer's Internet Protocol ("IP") address, browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages and other statistics.</li>
+          <li>Log data: Like most website operators, we collect information that your browser sends whenever you visit our Service. This Log Data may include information such as your computer&apos;s Internet Protocol (&quot;IP&quot;) address, browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages and other statistics.</li>
           <li>Personal Information: Information you provide when you register for an account, such as your name, email address, and profile information.</li>
           <li>User Content: Quotes, collections, and other content you create or upload to the Service.</li>
         </ul>

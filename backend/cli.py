@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import app.crud as crud
 import app.db as db
@@ -7,6 +8,7 @@ import app.model as model
 import app.populate as populate
 import app.security as security
 import app.tagging as tagging  # For ML-based tagging
+from app.data.populate_db import generate_sql_from_csv  # New import
 
 # For backfill, load models once
 _embedding_model_loaded_cli = False
@@ -162,6 +164,45 @@ def main():
         help="Number of quotes to process in each embedding batch (default: 32)",
     )
 
+    # New parser for populate-full
+    populate_full_parser = subparsers.add_parser(
+        "populate-full",
+        help="Populate the database with comprehensive mock data including users, collections, and favorites from quotes_sample.csv.",
+    )
+    populate_full_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-population even if data exists (use with caution).",
+    )
+    populate_full_parser.add_argument(
+        "--csv-file",
+        default="data/quotes_sample.csv",  # Default to the sample CSV in the data directory
+        help="Path to the CSV file to use for quotes (relative to app root).",
+    )
+    populate_full_parser.add_argument(
+        "--sql-file-name",
+        default="populate_quotes_database_full.sql",
+        help="Name of the generated SQL file in the data directory.",
+    )
+    populate_full_parser.add_argument(
+        "--num-users",
+        type=int,
+        default=50,
+        help="Number of mock users to create.",
+    )
+    populate_full_parser.add_argument(
+        "--quotes-per-collection",
+        type=int,
+        default=15,
+        help="Max quotes per mock collection.",
+    )
+    populate_full_parser.add_argument(
+        "--favorites-per-user",
+        type=int,
+        default=25,
+        help="Max favorites per mock user.",
+    )
+
     create_parser = subparsers.add_parser("create", help="Create new records")
     create_subparser = create_parser.add_subparsers(
         dest="create_type", help="Type of record to create", required=True
@@ -247,25 +288,117 @@ def main():
 
     args = parser.parse_args()
 
+    # Ensure APP_DIR is an absolute path to the /app directory where cli.py is located
+    # This assumes cli.py is in the root of the /app directory in the container.
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))  # Should be /app
+
     if args.command == "init":
         with db.get_connection() as conn:
-            with open("schema.postgresql", "r") as f:
-                commands = f.read()
-                conn.execute(commands)
-            conn.commit()
-            print("Database initialized.")
-        return
+            populate.init_db(conn)
+        print("Database initialized.")
+    elif args.command == "populate":
+        # Ensure file path is absolute or relative to APP_DIR if not already.
+        # The populate.py script might handle this, but being explicit here can help.
+        data_file_path = args.file
+        if not os.path.isabs(data_file_path):
+            data_file_path = os.path.join(APP_DIR, data_file_path)
 
-    if args.command == "populate":
-        with db.get_connection() as conn:
-            populate.populate_if_necessary(conn, args.file, args.n_entries)
-            # populate_if_necessary should handle its own commits.
+        if not os.path.exists(data_file_path):
             print(
-                f"Database populated with up to {args.n_entries} entries from {args.file}."
+                f"Error: Data file for populate not found at {data_file_path}. CWD: {os.getcwd()}"
             )
-        return
+            return 1  # Indicate error
 
-    if args.command == "backfill-quotes":
+        with db.get_connection() as conn:
+            populate.populate_if_necessary(
+                conn, data_file_path, args.n_entries
+            )
+    elif args.command == "populate-full":
+        # Construct paths relative to APP_DIR (/app)
+        # args.csv_file is 'data/quotes_sample.csv' by default or 'quotes_sample.csv' from prestart.sh
+        # args.sql_file_name is 'populate_quotes_database_full.sql'
+
+        csv_relative_path = args.csv_file
+        if not csv_relative_path.startswith(
+            "data/"
+        ):  # Ensure it's in the data subdirectory
+            csv_input_path = os.path.join(
+                APP_DIR, "data", os.path.basename(csv_relative_path)
+            )
+        else:
+            csv_input_path = os.path.join(APP_DIR, csv_relative_path)
+
+        # SQL file should be generated into the /app/data/ directory
+        sql_output_path = os.path.join(APP_DIR, "data", args.sql_file_name)
+
+        # Create the data directory if it doesn't exist (though Docker COPY should handle it)
+        os.makedirs(os.path.join(APP_DIR, "data"), exist_ok=True)
+
+        print(f"CLI populate-full: Using CSV input: {csv_input_path}")
+        print(f"CLI populate-full: SQL output target: {sql_output_path}")
+
+        if not os.path.exists(csv_input_path):
+            print(
+                f"Error: CSV input file not found at {csv_input_path}. CWD: {os.getcwd()}"
+            )
+            return 1  # Indicate error
+
+        try:
+            print(
+                f"CLI: Attempting to generate SQL file: {sql_output_path} from {csv_input_path}"
+            )
+            generate_sql_from_csv(
+                csv_filepath=csv_input_path,
+                sql_filepath=sql_output_path,
+                num_mock_users=args.num_users,
+                quotes_per_collection=args.quotes_per_collection,
+                favorites_per_user=args.favorites_per_user,
+            )
+            print(
+                f"CLI: SQL file generation call complete for: {sql_output_path}"
+            )
+        except Exception as e:
+            print(
+                f"CLI: Error during SQL file generation (generate_sql_from_csv call): {e}"
+            )
+            # It's critical that generate_sql_from_csv doesn't fail silently if it's supposed to create the file.
+            # If generate_sql_from_csv itself handles errors and returns, the file might not be created.
+            return 1  # Indicate error
+
+        if not os.path.exists(sql_output_path):
+            print(
+                f"Error: SQL file not found at {sql_output_path} after generation attempt. CWD: {os.getcwd()}. Check logs from generate_sql_from_csv for errors (e.g., model download)."
+            )
+            return 1  # Indicate error
+        else:
+            print(
+                f"CLI: Successfully verified generated SQL file exists at: {sql_output_path}"
+            )
+
+        with db.get_connection() as conn:
+            print(f"CLI: Executing generated SQL file: {sql_output_path}")
+            try:
+                with open(sql_output_path, "r", encoding="utf-8") as f:
+                    sql_commands = f.read()
+                if not sql_commands.strip():
+                    print(
+                        f"Warning: The generated SQL file {sql_output_path} is empty."
+                    )
+                else:
+                    with conn.cursor() as cur:
+                        cur.execute(sql_commands)
+                    conn.commit()
+                    print(
+                        f"CLI: Successfully executed generated SQL from {sql_output_path}."
+                    )
+            except Exception as e:
+                conn.rollback()
+                print(
+                    f"CLI: Error executing generated SQL file {sql_output_path}: {e}"
+                )
+                return 1  # Indicate error
+
+    elif args.command == "backfill-quotes":
         with db.get_connection() as conn:
             backfill_quotes_embeddings_and_tags(
                 conn, batch_size=args.batch_size
@@ -282,12 +415,24 @@ def main():
                         author = crud.create_author(conn, query)
                         print(f"Created author: {author}")
                     case "user":
+                        # Special handling for default admin user creation if that's the intent.
+                        # This is a bit of a heuristic. A more robust way would be a dedicated command
+                        # or environment variable for the initial admin password.
+                        password_to_use = args.password
+                        if (
+                            args.name == "admin"
+                            and args.email == "admin@example.com"
+                            and args.password == "admin"
+                        ):
+                            password_to_use = "SecurePwd123!"
+                            print(
+                                f"Using default strong password for admin user: {args.name}"
+                            )
+
                         query = model.CreateUserQuery(
                             username=args.name,
                             email=args.email,
-                            password=security.hash_password(
-                                args.password
-                            ),  # Hashing is done in crud.create_user
+                            password=password_to_use,
                         )
                         try:
                             user_resp = crud.create_user(conn, query)

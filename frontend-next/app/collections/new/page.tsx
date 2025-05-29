@@ -10,27 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { FolderPlus, Terminal, Loader2 } from "lucide-react"
+import { createCollection, CreateCollectionPayload } from '@/lib/api';
 
-interface NewCollectionPayload {
-  name: string;
-  description?: string;
-  isPublic: boolean;
-  // quoteIds?: string[]; // For adding existing quotes during creation (more complex UI)
-}
-
-async function submitNewCollection(payload: NewCollectionPayload): Promise<{ id: string } | { error: string }> {
-  console.log("API CALL (mock): Submitting new collection:", payload);
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  if (payload.name) {
-    if (payload.name.toLowerCase().includes("fail")) {
-        return { error: "Collection creation failed due to server validation: 'fail' keyword detected." };
-    }
-    return { id: `col${Math.floor(Math.random() * 1000) + 50}` };
-  } else {
-    return { error: "Collection name is required." };
-  }
-}
 
 export default function NewCollectionPage() {
   const router = useRouter();
@@ -47,26 +28,22 @@ export default function NewCollectionPage() {
     setError(null);
     setSuccessMessage(null);
 
-    const payload: NewCollectionPayload = {
-      name,
-      description,
-      isPublic,
-    };
+    const payload: CreateCollectionPayload = { name, description, isPublic };
 
-    const result = await submitNewCollection(payload);
-
-    if ('id' in result) {
-      setSuccessMessage(`Collection successfully created! ID: ${result.id}. Redirecting...`);
-      setTimeout(() => {
-        router.push(`/collections/${result.id}`);
-      }, 2000);
-      setName('');
-      setDescription('');
-      setIsPublic(true);
-    } else {
-      setError(result.error || "An unexpected error occurred.");
+    try {
+      const newCollection = await createCollection(payload, null);
+      setSuccessMessage(`Collection "${newCollection.name}" created successfully! ID: ${newCollection.id}. Redirecting...`);
+      setTimeout(() => router.push(`/collections`), 1500);
+    } catch (apiError: unknown) {
+      console.error("Create collection API error:", apiError);
+      let displayError = "Failed to create collection. Please try again.";
+      if (apiError instanceof Error && apiError.message) {
+        displayError = apiError.message;
+      }
+      setError(displayError);
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -114,12 +91,12 @@ export default function NewCollectionPage() {
                 Publicly Visible
               </Label>
             </div>
-             <p className="text-xs text-muted-foreground -mt-1 pl-12">
-                Allow others to discover and view this collection.
-              </p>
+            <p className="text-xs text-muted-foreground -mt-1 pl-12">
+              Allow others to discover and view this collection.
+            </p>
           </CardContent>
           <CardFooter className="flex flex-col gap-4 px-6 pb-8 pt-6 border-t border-border/50">
-             {error && (
+            {error && (
               <Alert variant="destructive" className="w-full">
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>Submission Error</AlertTitle>
@@ -128,7 +105,7 @@ export default function NewCollectionPage() {
             )}
             {successMessage && (
               <Alert variant="default" className="w-full bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400">
-                 <FolderPlus className="h-4 w-4 !text-green-700 dark:!text-green-400" />
+                <FolderPlus className="h-4 w-4 !text-green-700 dark:!text-green-400" />
                 <AlertTitle className="!text-green-700 dark:!text-green-500">Success!</AlertTitle>
                 <AlertDescription className="!text-green-600 dark:!text-green-300">{successMessage}</AlertDescription>
               </Alert>

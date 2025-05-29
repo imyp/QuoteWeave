@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, FormEvent } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,14 +129,14 @@ export default function ContactPage() {
         </form>
       </div>
 
-      <section className="text-center mt-16">
+      {/* <section className="text-center mt-16">
         <p className="text-muted-foreground">
           You can also find us on [Social Media Placeholder] or email us directly at <a href="mailto:contact@quoteweave.com" className="text-primary hover:underline">contact@quoteweave.com</a>.
         </p>
         <Link href="/" className="mt-4 inline-block text-primary hover:underline">
           Back to Home
         </Link>
-      </section>
+      </section> */}
     </div>
   );
 }

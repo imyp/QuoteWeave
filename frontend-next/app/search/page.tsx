@@ -1,122 +1,24 @@
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { QuotePageEntry, favoriteQuote, unfavoriteQuote, allMockQuotes as globalMockQuotes } from "@/lib/quote-utils";
-import { CollectionEntry } from "@/lib/collection-utils";
-import { Loader2, SearchIcon, QuoteIcon as LucideQuoteIcon, BookOpenText, Terminal, Heart, TagsIcon, UserCircle2 } from "lucide-react";
-import { Dialog, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import QuoteDetailModal from "@/components/QuoteDetailModal";
-
-// Refactor tempSearchQuotes to use globalMockQuotes for consistency
-async function tempSearchQuotes(params: { query_string: string, limit: number }): Promise<{ quotes: QuotePageEntry[] }> {
-  console.log("Mock API (using global): searchQuotes", params);
-  await new Promise(resolve => setTimeout(resolve, 300));
-
-  const query = params.query_string.toLowerCase();
-  const filtered = globalMockQuotes.filter(q =>
-    q.text.toLowerCase().includes(query) ||
-    q.authorName.toLowerCase().includes(query) ||
-    q.tags.some(tag => tag.toLowerCase().includes(query))
-  ).slice(0, params.limit);
-
-  return { quotes: filtered };
-}
-
-interface QuoteResultCardProps {
-  quote: QuotePageEntry;
-  onQuoteUpdate: (updatedQuote: QuotePageEntry) => void; // Callback to update quote in parent state
-  onOpenModal: () => void;
-}
-
-function QuoteResultCard({ quote, onOpenModal, onQuoteUpdate }: QuoteResultCardProps) {
-  const [isFavoriting, setIsFavoriting] = useState(false);
-  const [animateHeart, setAnimateHeart] = useState(false);
-
-  const handleFavoriteToggle = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsFavoriting(true);
-    setAnimateHeart(true);
-    setTimeout(() => setAnimateHeart(false), 400);
-    try {
-      const apiCall = quote.isFavorited ? unfavoriteQuote : favoriteQuote;
-      const result = await apiCall(quote.id);
-      if (result.success && result.data) {
-        onQuoteUpdate(result.data);
-      }
-    } catch (error) {
-      console.error("Failed to update favorite status", error);
-    } finally {
-      setIsFavoriting(false);
-    }
-  };
-
-  return (
-    <DialogTrigger asChild>
-      <Card
-        onClick={onOpenModal}
-        className="bg-card/70 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-200 ease-in-out cursor-pointer group flex flex-col h-full border border-transparent hover:border-primary/30"
-      >
-        <CardHeader className="pb-3">
-          <Link href={`/authors/${quote.authorId}`} onClick={(e) => e.stopPropagation()} className="group/author inline-flex items-center w-fit">
-            <UserCircle2 className="h-5 w-5 mr-2 text-muted-foreground group-hover/author:text-primary transition-colors" />
-            <CardDescription className="text-sm font-medium text-muted-foreground group-hover/author:text-primary transition-colors">
-              {quote.authorName}
-            </CardDescription>
-          </Link>
-        </CardHeader>
-        <CardContent className="flex-grow pb-3">
-          <blockquote className="text-md italic text-foreground group-hover:text-primary transition-colors line-clamp-4">
-            &ldquo;{quote.text}&rdquo;
-          </blockquote>
-        </CardContent>
-        <CardFooter className="text-xs text-muted-foreground pt-3 border-t border-border/50 mt-auto flex justify-between items-center">
-          <div className="flex items-center gap-1.5">
-            <TagsIcon className="h-3.5 w-3.5" />
-            {quote.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {quote.tags.slice(0, 1).map(tag => (
-                  <Badge key={tag} variant="secondary" className="px-1.5 py-0.5 text-xs font-normal group-hover:bg-primary/20">
-                    {tag}
-                  </Badge>
-                ))}
-                {quote.tags.length > 1 && (
-                  <Badge variant="outline" className="px-1.5 py-0.5 text-xs font-normal">+{quote.tags.length - 1}</Badge>
-                )}
-              </div>
-            ) : (
-              <span className="text-xxs">No tags</span>
-            )}
-          </div>
-          <div className="flex items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 group/fav ${quote.isFavorited ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-red-500'}`}
-              onClick={handleFavoriteToggle}
-              disabled={isFavoriting}
-            >
-              <Heart className={`h-4 w-4 ${quote.isFavorited ? 'fill-current' : 'group-hover/fav:fill-red-500/30'} ${animateHeart ? 'animate-pulse-heart' : ''} transition-all`} />
-              <span className="sr-only">Favorite</span>
-            </Button>
-            <span className="text-xs min-w-[18px] text-right tabular-nums ml-1">{quote.favoriteCount || 0}</span>
-          </div>
-        </CardFooter>
-      </Card>
-    </DialogTrigger>
-  );
-}
+import { searchQuotesSemantic, type QuotePageEntry, searchCollections } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
+import { type CollectionEntry } from "@/lib/api";
+import { Loader2, SearchIcon, QuoteIcon as LucideQuoteIcon, BookOpenText, Terminal } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import QuoteDetailModal from "@/components/quote-detail-modal";
+import QuoteCard from "@/components/quote-card";
 
 export default function SearchPage() {
-  const router = useRouter();
+  const { token, isAuthenticated } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState<'quotes' | 'collections'>('quotes');
+  const [searchType, /* setSearchType */] = useState<'quotes' | 'collections'>('quotes');
   const [quoteResults, setQuoteResults] = useState<QuotePageEntry[]>([]);
   const [collectionResults, setCollectionResults] = useState<CollectionEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -135,7 +37,10 @@ export default function SearchPage() {
 
   const handleSearch = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
-    if (!searchTerm.trim()) return;
+    if (!searchTerm.trim()) {
+      toast.info("Please enter a search term.");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -145,19 +50,20 @@ export default function SearchPage() {
 
     try {
       if (searchType === 'quotes') {
-        const response = await tempSearchQuotes({ query_string: searchTerm, limit: 10 });
-        setQuoteResults(response.quotes);
+        const results = await searchQuotesSemantic(searchTerm, 20, 0, isAuthenticated ? token : null);
+        setQuoteResults(results);
+        if (results.length === 0 && searchTerm.trim()) {
+          toast.info("No quotes found for your search.");
+        }
       } else if (searchType === 'collections') {
-        // TODO: Implement collection search
-        // For now, simulate finding no collections or a mock collection
-        // const mockCollections: CollectionEntry[] = [{ id: 'col1', name: 'My Mock Collection', description: 'A collection about...', isPublic: true, quoteCount: 5, userId: 'user1' }];
-        // setResults(mockCollections);
-        setCollectionResults([]);
-        console.log("Collection search not yet implemented for this view.");
+        const results = await searchCollections(searchTerm, 20, 0, isAuthenticated ? token : null);
+        setCollectionResults(results);
+        if (results.length === 0 && searchTerm.trim()) {
+          toast.info("No collections found for your search.");
+        }
       }
     } catch (err) {
-      console.error(err);
-      setError('Failed to fetch search results. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to fetch search results. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -227,10 +133,10 @@ export default function SearchPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {searchType === 'quotes' && quoteResults.map(quote => (
-                <QuoteResultCard
+                <QuoteCard
                   key={`quote-search-${quote.id}`}
                   quote={quote}
-                  onOpenModal={() => handleOpenModal(quote)}
+                  onOpenModal={handleOpenModal}
                   onQuoteUpdate={handleQuoteUpdateInSearch}
                 />
               ))}
@@ -243,7 +149,9 @@ export default function SearchPage() {
                         {collection.name}
                       </CardTitle>
                     </Link>
-                    <CardDescription className="text-xs pt-1">{collection.quoteCount} quotes - {collection.isPublic ? 'Public' : 'Private'}</CardDescription>
+                    <CardDescription className="text-xs pt-1">
+                      By: {collection.authorName} - {collection.quoteCount} quotes - {collection.isPublic ? 'Public' : 'Private'}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-grow">
                     <p className="text-sm text-muted-foreground line-clamp-3">{collection.description}</p>

@@ -9,23 +9,24 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UserPlus, Terminal, Loader2, CheckCircle } from "lucide-react";
+import { registerUser, CreateUserPayload } from "@/lib/api"; // Import registerUser and CreateUserPayload
 
-// Mock API function for signup
-async function submitSignup(payload: { username: string, email: string, password?: string }): Promise<{ success: boolean; message: string; error?: string }> {
-  console.log("API CALL (mock): Signing up with:", payload);
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+// Mock API function for signup (Removed)
+// async function submitSignup(payload: { username: string, email: string, password?: string }): Promise<{ success: boolean; message: string; error?: string }> {
+//   console.log("API CALL (mock): Signing up with:", payload);
+//   await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
 
-  if (!payload.username || !payload.email || !payload.password) {
-    return { success: false, message: "All fields are required.", error: "missing_fields" };
-  }
-  if (payload.username.toLowerCase() === "existinguser" || payload.email.toLowerCase() === "existing@example.com") {
-    return { success: false, message: "Username or email already taken.", error: "user_exists" };
-  }
-  if (payload.username.toLowerCase().includes("fail")){
-    return { success: false, message: "Signup failed due to server validation.", error: "server_validation_fail" };
-  }
-  return { success: true, message: "Account created successfully! Please log in." };
-}
+//   if (!payload.username || !payload.email || !payload.password) {
+//     return { success: false, message: "All fields are required.", error: "missing_fields" };
+//   }
+//   if (payload.username.toLowerCase() === "existinguser" || payload.email.toLowerCase() === "existing@example.com") {
+//     return { success: false, message: "Username or email already taken.", error: "user_exists" };
+//   }
+//   if (payload.username.toLowerCase().includes("fail")){
+//     return { success: false, message: "Signup failed due to server validation.", error: "server_validation_fail" };
+//   }
+//   return { success: true, message: "Account created successfully! Please log in." };
+// }
 
 export default function SignupPage() {
   const router = useRouter();
@@ -42,19 +43,21 @@ export default function SignupPage() {
     setError(null);
     setSuccessMessage(null);
 
-    const result = await submitSignup({ username, email, password });
+    const payload: CreateUserPayload = { username, email, password };
 
-    if (result.success) {
-      setSuccessMessage(result.message);
+    try {
+      await registerUser(payload);
+      setSuccessMessage("Account created successfully! Redirecting to login...");
       setTimeout(() => {
-        router.push('/login'); // Redirect to login page after successful signup
+        router.push('/login?signupSuccess=true'); // Redirect to login page with a success indicator
       }, 2000);
-       // Clear form on success
+      // Clear form on success
       setUsername('');
       setEmail('');
       setPassword('');
-    } else {
-      setError(result.message);
+    } catch (err) {
+      console.error("Signup API error:", err);
+      setError((err instanceof Error ? err.message : String(err)) || "An unexpected error occurred.");
     }
     setIsLoading(false);
   };

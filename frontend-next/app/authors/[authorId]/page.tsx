@@ -3,20 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuotePageEntry, getQuotePage, PaginatedQuotesResponse, favoriteQuote, unfavoriteQuote } from "@/lib/quote-utils";
-import { getAuthorDetails, AuthorDetails } from "@/lib/author-utils";
+import { getAuthorDetails, AuthorDetailsResponse, CollectionEntry } from "@/lib/api";
 import { Loader2, UserCircle2, BookOpenText, Terminal, ArrowLeft, Heart, TagsIcon } from "lucide-react";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
-import QuoteDetailModal from "@/components/QuoteDetailModal";
+import QuoteDetailModal from "@/components/quote-detail-modal";
 
 interface AuthorQuoteCardProps {
   quote: QuotePageEntry;
-  onQuoteUpdate: (updatedQuote: QuotePageEntry) => void;
   onOpenModal: () => void;
+  onQuoteUpdate: (updatedQuote: QuotePageEntry) => void;
 }
 
 function AuthorQuoteCard({ quote, onOpenModal, onQuoteUpdate }: AuthorQuoteCardProps) {
@@ -94,13 +94,14 @@ export default function AuthorPage() {
   const router = useRouter();
   const authorId = params.authorId as string;
 
-  const [authorDetails, setAuthorDetails] = useState<AuthorDetails | null>(null);
+  const [authorDetails, setAuthorDetails] = useState<AuthorDetailsResponse | null>(null);
   const [authorQuotesData, setAuthorQuotesData] = useState<PaginatedQuotesResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<QuotePageEntry | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, ] = useState(1);
   const QUOTES_PER_PAGE = 6;
+  const numericAuthorId = parseInt(authorId, 10);
 
   const handleQuoteUpdateOnPage = (updatedQuote: QuotePageEntry) => {
     setAuthorQuotesData(prevData => {
@@ -125,13 +126,18 @@ export default function AuthorPage() {
       setIsLoading(false);
       return;
     }
+    if (isNaN(numericAuthorId)) {
+        setError("Invalid Author ID format.");
+        setIsLoading(false);
+        return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     Promise.all([
-      getAuthorDetails(authorId),
-      getQuotePage(currentPage, QUOTES_PER_PAGE, { authorId })
+      getAuthorDetails(numericAuthorId),
+      getQuotePage(currentPage, QUOTES_PER_PAGE, { authorId: numericAuthorId })
     ])
     .then(([details, quotesResponse]) => {
       if (!details) {
@@ -148,7 +154,7 @@ export default function AuthorPage() {
     .finally(() => {
       setIsLoading(false);
     });
-  }, [authorId, currentPage, router]);
+  }, [authorId, currentPage, router, numericAuthorId]);
 
   if (isLoading) {
     return (
@@ -197,15 +203,10 @@ export default function AuthorPage() {
           <CardHeader className="text-center pb-4">
             <UserCircle2 className="mx-auto h-16 w-16 text-primary mb-3" />
             <CardTitle className="text-4xl font-bold text-foreground">{authorDetails.name}</CardTitle>
-            {authorDetails.bio && (
-              <CardDescription className="mt-2 text-muted-foreground max-w-xl mx-auto text-sm">
-                {authorDetails.bio}
-              </CardDescription>
-            )}
           </CardHeader>
-          {authorQuotesData && (
+          {authorQuotesData && authorDetails && authorDetails.quotes && (
              <CardFooter className="flex justify-center text-sm text-muted-foreground pb-4 pt-2 border-t border-border/30">
-                Displaying {authorQuotesData.quotes.length} of {authorQuotesData.totalQuotes} quotes by this author.
+                Displaying {authorQuotesData.quotes.length} of {authorDetails.quotes.length} quotes by this author.
             </CardFooter>
           )}
         </Card>
@@ -246,27 +247,66 @@ export default function AuthorPage() {
           <div className="mb-10">
             <h2 className="text-3xl font-bold mb-6 text-foreground">Collections</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {authorDetails.collections.map((collection: any) => (
-                <Card key={collection.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
-                  <CardContent className="p-4 flex-grow flex items-center justify-center">
-                    <Link href={`/collections/${collection.id}`} className="block text-center">
-                      <h3 className="text-xl font-semibold text-primary hover:underline transition-colors">{collection.name}</h3>
-                      {collection.description && <p className="text-xs text-muted-foreground mt-1">{collection.description}</p>}
-                    </Link>
-                  </CardContent>
-                </Card>
-              ))}
+              {authorDetails.collections.map((collectionSimple) => {
+                const collection: CollectionEntry = {
+                  id: collectionSimple.id,
+                  name: collectionSimple.name,
+                  description: "", // Default, not in AuthorCollectionSimple
+                  isPublic: false, // Default, not in AuthorCollectionSimple
+                  authorId: authorDetails.id, // From parent authorDetails
+                  authorName: authorDetails.name, // From parent authorDetails
+                  quoteCount: 0, // Default, not in AuthorCollectionSimple. This could be fetched if needed.
+                  // createdAt and updatedAt are also in CollectionEntry but not used by this card currently
+                };
+                return (
+                  <Card key={collection.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
+                    <CardHeader className="pb-2 pt-4">
+                      <Link href={`/collections/${collection.id}`} passHref>
+                          <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
+                              {collection.name}
+                          </CardTitle>
+                      </Link>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-sm text-muted-foreground flex-grow">
+                      {collection.description && (
+                          <p className="line-clamp-2 mb-2">
+                              {collection.description}
+                          </p>
+                      )}
+                       <Badge variant={collection.isPublic ? "default" : "secondary"} className="capitalize text-xs">
+                          {collection.isPublic ? "Public" : "Private"}
+                      </Badge>
+                    </CardContent>
+                    <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
+                      <span>{collection.quoteCount} {collection.quoteCount === 1 ? "quote" : "quotes"}</span>
+                      <Link href={`/collections/${collection.id}`} passHref>
+                          <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
+                      </Link>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}
-
-        {selectedQuote && (
-            <QuoteDetailModal
-                quote={selectedQuote}
-                onQuoteUpdate={handleQuoteUpdateOnPage}
-            />
-        )}
       </div>
+
+      {selectedQuote && (
+        <QuoteDetailModal
+          quote={{
+            ...selectedQuote,
+            author: selectedQuote.authorName,
+          }}
+          onQuoteUpdate={(updatedApiQuote) => {
+            const { /* author, */ ...restOfQuote } = updatedApiQuote;
+            handleQuoteUpdateOnPage({
+              ...restOfQuote,
+              authorId: selectedQuote.authorId,
+              authorName: selectedQuote.authorName,
+            });
+          }}
+        />
+      )}
     </Dialog>
   );
 }

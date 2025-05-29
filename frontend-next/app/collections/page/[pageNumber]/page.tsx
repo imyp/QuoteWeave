@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { getCollectionPage, CollectionEntry, PaginatedCollectionsResponse } from "@/lib/collection-utils";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { searchCollections, CollectionEntry } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { LayersIcon, Terminal } from "lucide-react";
+import { LayersIcon, Terminal, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 const ITEMS_PER_PAGE = 9;
+
 
 function CollectionEntryCard({ collection }: { collection: CollectionEntry }) {
   return (
@@ -23,11 +26,11 @@ function CollectionEntryCard({ collection }: { collection: CollectionEntry }) {
         </CardHeader>
         <CardContent className="flex-grow pb-3">
           <CardDescription className="line-clamp-3 text-sm">
-            {collection.description}
+            {collection.description || "No description available."}
           </CardDescription>
         </CardContent>
         <CardFooter className="text-xs text-muted-foreground pt-3 border-t border-border/50 mt-auto flex justify-between">
-          <span>{collection.quoteCount} Quotes</span>
+          <span>{collection.quoteCount || 0} Quotes</span>
           <span>{collection.isPublic ? "Public" : "Private"}</span>
         </CardFooter>
       </Card>
@@ -38,29 +41,43 @@ function CollectionEntryCard({ collection }: { collection: CollectionEntry }) {
 export default function CollectionsDisplayPage() {
   const router = useRouter();
   const paramsHook = useParams();
-  const searchParams = useSearchParams();
+  const { token: authToken, isLoading: authIsLoading } = useAuth();
 
   const pageNumberString = paramsHook.pageNumber as string;
   const pageNumber = parseInt(pageNumberString || "1", 10);
 
-  const [collectionsData, setCollectionsData] = useState<PaginatedCollectionsResponse | null>(null);
+  const [collections, setCollections] = useState<CollectionEntry[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authIsLoading) {
+        setIsLoading(true);
+        return;
+    }
+
     if (isNaN(pageNumber) || pageNumber < 1) {
       router.replace('/collections/page/1');
       return;
     }
     setIsLoading(true);
     setError(null);
-    getCollectionPage(pageNumber, ITEMS_PER_PAGE)
+
+    const skip = (pageNumber - 1) * ITEMS_PER_PAGE;
+    searchCollections("", ITEMS_PER_PAGE, skip, authToken)
       .then(data => {
-        if (pageNumber > data.totalPages && data.totalPages > 0) {
-          router.replace(`/collections/page/${data.totalPages}`);
+        setCollections(data || []);
+        if (data && data.length < ITEMS_PER_PAGE) {
+            setTotalPages(pageNumber);
+        } else if (data && data.length === ITEMS_PER_PAGE) {
+            setTotalPages(pageNumber + 1);
+        }
+
+        if (data && data.length === 0 && pageNumber > 1) {
+          router.replace('/collections/page/1');
           return;
         }
-        setCollectionsData(data);
       })
       .catch(err => {
         console.error("Failed to fetch collections:", err);
@@ -69,10 +86,9 @@ export default function CollectionsDisplayPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [pageNumber, router]);
+  }, [pageNumber, router, authToken, authIsLoading]);
 
   const pageIndices = useMemo(() => {
-    const totalPages = collectionsData?.totalPages || 0;
     if (totalPages <= 0) return [];
     const pages = new Set<number>();
     pages.add(1);
@@ -89,7 +105,7 @@ export default function CollectionsDisplayPage() {
       if (i === 0) {
         result.push(page);
       } else {
-        const prev = sortedPages[i-1];
+        const prev = sortedPages[i - 1];
         if (page - prev === 1) {
           result.push(page);
         } else {
@@ -99,24 +115,13 @@ export default function CollectionsDisplayPage() {
       }
     }
     return result;
-  }, [pageNumber, collectionsData?.totalPages]);
+  }, [pageNumber, totalPages]);
 
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8 min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
-        <div className="animate-pulse space-y-4 w-full max-w-md">
-          <div className="h-8 bg-muted rounded w-3/4 mx-auto"></div>
-          <div className="h-4 bg-muted rounded w-1/2 mx-auto"></div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-12 w-full">
-          {Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
-            <Card key={i} className="bg-card/50">
-              <CardHeader><div className="h-6 bg-muted rounded w-3/4"></div></CardHeader>
-              <CardContent><div className="h-4 bg-muted rounded w-full mb-2"></div><div className="h-4 bg-muted rounded w-5/6"></div></CardContent>
-              <CardFooter><div className="h-4 bg-muted rounded w-1/4"></div></CardFooter>
-            </Card>
-          ))}
-        </div>
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Loading collections...</p>
       </div>
     );
   }
@@ -124,7 +129,7 @@ export default function CollectionsDisplayPage() {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8 min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
-         <Alert variant="destructive" className="max-w-lg">
+        <Alert variant="destructive" className="max-w-lg">
           <Terminal className="h-4 w-4" />
           <AlertTitle>Error Loading Collections</AlertTitle>
           <AlertDescription>
@@ -135,8 +140,8 @@ export default function CollectionsDisplayPage() {
     );
   }
 
-  if (!collectionsData || collectionsData.totalPages === 0) {
-     return (
+  if (collections.length === 0 && pageNumber === 1) {
+    return (
       <div className="container mx-auto px-4 py-8 min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground mb-4">No Collections Found</h1>
         <p className="text-muted-foreground mb-8">It looks like there are no collections to display at the moment.</p>
@@ -154,13 +159,22 @@ export default function CollectionsDisplayPage() {
         <p className="mt-2 text-lg text-muted-foreground">Browse through curated collections of quotes.</p>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 flex-grow">
-        {collectionsData.collections.map(collection => (
-          <CollectionEntryCard key={collection.id} collection={collection} />
-        ))}
-      </div>
+      {collections.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 flex-grow">
+          {collections.map(collection => (
+            <CollectionEntryCard key={collection.id} collection={collection} />
+          ))}
+        </div>
+      ) : (
+        pageNumber > 1 && (
+          <div className="text-center py-10 text-muted-foreground">
+            <p className="text-lg">No more collections found for page {pageNumber}.</p>
+            <Button onClick={() => router.push('/collections/page/1')} variant="link">Back to first page</Button>
+          </div>
+        )
+      )}
 
-      {collectionsData.totalPages > 1 && (
+      {totalPages > 1 && collections.length > 0 && (
         <Pagination className="mt-12 pt-4 border-t border-border">
           <PaginationContent>
             {pageNumber > 1 && (
@@ -179,7 +193,7 @@ export default function CollectionsDisplayPage() {
                 )}
               </PaginationItem>
             ))}
-            {pageNumber < collectionsData.totalPages && (
+            {pageNumber < totalPages && (
               <PaginationItem>
                 <PaginationNext href={`/collections/page/${pageNumber + 1}`} />
               </PaginationItem>
