@@ -1,0 +1,10 @@
+flan-t5-semantic-tagger/
+flan-t5-semantic-tagger-small/
+flan-t5-semantic-tagger-base/
+test_dataset/
+train_dataset/
+val_dataset/
+my-4bit-model/
+flan-t5-semantic-tagger-small-pt/
+my-4bit-model-3/
+my-4bit-model-4/

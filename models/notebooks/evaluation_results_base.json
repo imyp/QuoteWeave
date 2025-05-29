@@ -1,0 +1,155 @@
+{
+  "metrics": {
+    "jaccard_score": 0.11447569097569095,
+    "semantic_similarity": 0.43821433186531067,
+    "combined_score": 0.6671656966209412
+  },
+  "examples": [
+    {
+      "text": "What tags or categories would best describe this quote: \"The sting of her abandonment had not lessened through the years, and I suspected it would never go away. Occasionally, I could see agony in her...",
+      "reference_tags": [
+        "love",
+        "relationship",
+        "suffering"
+      ],
+      "predicted_tags": [
+        "abandonment",
+        "t.j.-forrester"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.2328016459941864
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Everything that falls upon the eye is an apparition, a sheet dropped over the world's true workings. The nerves & brain are tricked, and one is...",
+      "reference_tags": [
+        "grief",
+        "loss",
+        "memory",
+        "remembering-the-good",
+        "time"
+      ],
+      "predicted_tags": [
+        "apparition",
+        "perishable"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.20680826902389526
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"I don't hate Republicans as individuals. But I hate what the Republicans are doing to this country. I really do. \" by Howard Dean? Provide comm...",
+      "reference_tags": [
+        "politics",
+        "republicans"
+      ],
+      "predicted_tags": [
+        "America",
+        "Hate",
+        "Individuals"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.5123962163925171
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Think More Not Less.\" by Jelani Payne? Provide comma-separated tags....",
+      "reference_tags": [
+        "critical-thinking",
+        "perspective"
+      ],
+      "predicted_tags": [
+        "Thinking",
+        "Less"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.4647846519947052
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Some individuals have the courage to make it, even feel the need to do so; for them the quest is a necessity, not an option. Most people settin...",
+      "reference_tags": [
+        "comfortable",
+        "dream",
+        "inspirational",
+        "journey",
+        "journeys",
+        "leadership",
+        "motivation",
+        "motivational",
+        "success"
+      ],
+      "predicted_tags": [
+        "dream",
+        "adventure",
+        "romance"
+      ],
+      "jaccard_score": 0.09090909090909091,
+      "semantic_similarity": 0.42103761434555054
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Life is magic.I knew, without having to ask, what she meant. Life was not the magic of spells or enchantments or sorcery; or, it was, but that ...",
+      "reference_tags": [
+        "life",
+        "magic"
+      ],
+      "predicted_tags": [
+        "magic",
+        "magic-quotes"
+      ],
+      "jaccard_score": 0.3333333333333333,
+      "semantic_similarity": 0.6183293461799622
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Books are all the dreams we would most like to have and like dreams they have the power to change consciousness. \" by Victor Nell? Provide comm...",
+      "reference_tags": [
+        "books",
+        "victor-nell"
+      ],
+      "predicted_tags": [
+        "book",
+        "dream",
+        "consciousness"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.3622615933418274
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"It is madness. But sometimes, madness is the only path forward.\" by Anne Fortier? Provide comma-separated tags....",
+      "reference_tags": [
+        "carry-on",
+        "madness",
+        "path-forward"
+      ],
+      "predicted_tags": [
+        "path",
+        "madness"
+      ],
+      "jaccard_score": 0.25,
+      "semantic_similarity": 0.6872527599334717
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"I didn't care whether I had gotten dressed, or what state my hair was in or anything\u2013 it didn't matter. I felt close to him, and I'd come to re...",
+      "reference_tags": [
+        "home",
+        "love"
+      ],
+      "predicted_tags": [
+        "hair",
+        "hair-doesn't-appear"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.09801375865936279
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Before you tell your life what you intend to do with it, listen for what it intends to do with you. Before you tell your life what truths and v...",
+      "reference_tags": [
+        "life",
+        "truth",
+        "values"
+      ],
+      "predicted_tags": [
+        "life",
+        "life-quotes"
+      ],
+      "jaccard_score": 0.25,
+      "semantic_similarity": 0.5088619589805603
+    }
+  ]
+}
