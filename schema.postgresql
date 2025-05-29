@@ -1,0 +1,48 @@
+CREATE TABLE Author (
+    aid integer GENERATED ALWAYS AS IDENTITY,
+    name text NOT NULL UNIQUE
+);
+
+CREATE TABLE AUser (
+    author_id integer,
+    email text NOT NULL UNIQUE,
+    pw text NOT NULL,
+    FOREIGN KEY (author_id) REFERENCES Author(aid) ON DELETE CASCADE
+);
+
+CREATE TABLE Collection (
+    cid integer GENERATED ALWAYS AS IDENTITY,
+    aid integer NOT NULL,
+    name text NOT NULL,
+    description text NOT NULL,
+    is_public boolean DEFAULT false,
+    FOREIGN KEY (aid) REFERENCES Author (aid) ON DELETE CASCADE,
+    UNQUE (aid, name)
+);
+
+CREATE TABLE Quote (
+    qid integer GENERATED ALWAYS AS IDENTITY,
+    author_id integer NOT NULL,
+    text text NOT NULL,
+    is_public boolean DEFAULT false,
+    FOREIGN KEY (aid) REFERENCES Author (aid) ON DELETE CASCADE
+);
+
+CREATE TABLE CollectionContains (
+    cid integer NOT NULL,
+    qid integer NOT NULL,
+    FOREIGN KEY (cid) REFERENCES Collection (cid) ON DELETE CASCADE,
+    FOREIGN KEY (qid) REFERENCES Quote (qid) ON DELETE CASCADE
+);
+
+CREATE TABLE Tag (
+    tid integer GENERATED ALWAYS AS IDENTITY,
+    name text NOT NULL UNIQUE,
+)
+
+CREATE TABLE TaggedAs (
+    qid integer REFERENCES Quote (qid),
+    tid integer REFERENCES Tag (tid),
+    FOREIGN KEY (qid) REFERENCES Quote (qid) ON DELETE CASCADE,
+    FOREIGN KEY (tid) REFERENCES Tag (tid) ON DELETE CASCADE
+)
