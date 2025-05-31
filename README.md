@@ -72,6 +72,9 @@ The QuoteWeave web application:
 
 ## Screenshots
 
+### Hero (Landing Page)
+![Hero (Landing Page)](assets/light-mode-hero.png)
+
 ### Create Quote with AI Tagging (Light Mode)
 ![Create Quote with AI Tagging](assets/light-mode-create-quote-with-ai-tagging.png)
 
