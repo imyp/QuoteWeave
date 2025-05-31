@@ -437,10 +437,7 @@ def generate_sql_from_csv(
         sqlfile.write("-- Collections --\n")
         for col_info in collections_list:
             escaped_name = col_info["name"].replace("'", "''")
-            escaped_desc = col_info.get("description", "").replace(
-                "'", "''"
-            )  # Ensure description exists
-            # Corrected table name to 'collection' and column to 'author_id'
+            escaped_desc = col_info.get("description", "").replace("'", "''")
             sqlfile.write(
                 f"INSERT INTO collection (id, author_id, name, description, is_public, created_at, updated_at) VALUES ({col_info['id']}, {col_info['author_id']}, '{escaped_name}', '{escaped_desc}', {col_info['is_public']}, '{col_info['created_at']}', '{col_info['updated_at']}') ON CONFLICT (id) DO NOTHING;\n"
             )
@@ -478,19 +475,12 @@ try:
     import ast
 except ImportError:
     logger.error("Failed to import ast module. Tag parsing might be affected.")
-    # Decide if this is critical enough to exit or just warn
-    # sys.exit(1)
 
 
 if __name__ == "__main__":
     # Determine the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Construct paths relative to the script directory
-    # Assumes quotes_sample.csv is in the same directory as populate_db.py
-    # and the output SQL should also go there.
-    # For a typical project structure, data might be in a subfolder e.g., ../data/
-    # Adjust paths as per your project structure if needed.
     default_csv_file = os.path.join(script_dir, "quotes_sample.csv")
     default_sql_file = os.path.join(
         script_dir, "populate_quotes_database_full.sql"

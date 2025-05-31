@@ -25,6 +25,8 @@ To build and run the application:
         *   Initializes the database schema using `backend/schema.postgresql`.
         *   Populates the database with sample data via `python cli.py populate-full`.
         *   Creates a default admin user.
+    *   **Note**: This command might take several minutes to complete, especially on the first run.
+    *   **Important**: After the services are up, please monitor the Docker logs (e.g., using `docker-compose logs -f backend`). Wait for the message `============================= FINISHED SETUP. READY TO USE =============================` before interacting with the application, especially features like semantic search.
 
 ### How to Interact with Our Web-App
 Once the `docker-compose up` command completes successfully:

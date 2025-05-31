@@ -151,6 +151,9 @@ async def lifespan(app: FastAPI):
         )
 
     print("Startup via lifespan finished.")
+    print(
+        "\n=============================\nFINISHED SETUP. READY TO USE\n=============================\n"
+    )
     yield
     print("Application shutdown via lifespan...")
 
