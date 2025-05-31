@@ -19,16 +19,17 @@ For demonstration purposes, you can use the following credentials:
 
 ![Entity/Relationship Diagram for QuoteWeave](diagram/diagram_v1.png)
 
-The relations are shown below:
+The relations are shown below. The full diagram can also be found in `diagram/diagram.pdf`.
 
 ```
-Author(aid:int, name:str)
-User(aid:int, email:str, password_hash:str)
-Collection(cid:int, aid:int, name:str, desc:str, pub:bool)
-Quote(qid:int, aid:int, text:str, pub:bool, embedding:list[float])
-TaggedAs(qid:int, tid:int)
-Tag(tid:int, name:str)
-Favorites(aid:int, qid:int)
+Author(id:integer, name:text)
+User(id:integer, author_id:integer, email:text, password_hash:text, created_at:timestamptz)
+Collection(id:integer, author_id:integer, name:text, description:text, is_public:boolean, created_at:timestamptz, updated_at:timestamptz)
+Quote(id:integer, author_id:integer, text:text, is_public:boolean, embedding:vector, created_at:timestamptz, updated_at:timestamptz)
+TaggedAs(quote_id:integer, tag_id:integer)
+Tag(id:integer, name:text)
+UserQuoteFavorite(user_id:integer, quote_id:integer, created_at:timestamptz)
+CollectionContains(collection_id:integer, quote_id:integer, added_at:timestamptz)
 ```
 
 ## How to compile and run our web-app
@@ -69,5 +70,18 @@ The QuoteWeave web application:
 -   **Semantic Tagging**: The application uses a FLAN-T5 small model, fine-tuned with a custom loss function, to automatically generate relevant tags for quotes. The model is hosted on Hugging Face at [fristrup/flan-t5-semantic-tagger-small](https://huggingface.co/fristrup/flan-t5-semantic-tagger-small). The tagging functionality is implemented in `backend/app/tagging.py`, and the model training process, including the custom loss function, is detailed in the Jupyter notebook `models/notebooks/flan_training.ipynb`.
 -   **Theme Customization**: Users can choose between light, dark, or system default themes. This setting is accessible on the settings page (`frontend-next/app/settings/page.tsx`) when logged in.
 
+## Screenshots
+
+### Create Quote with AI Tagging (Light Mode)
+![Create Quote with AI Tagging](assets/light-mode-create-quote-with-ai-tagging.png)
+
+### Semantic Search (Dark Mode)
+![Semantic Search](assets/dark-mode-semantic-search.png)
+
+### Collections (Light Mode)
+![Collections](assets/light-mode-collections.png)
+
 ## Project Repository
 The git repository for this project contains all source code, the E/R diagram, and this README file.
+
+**Note:** The `_old_frontend` directory contains a previous version of the frontend and is no longer in use. The current frontend code can be found in the `frontend-next` directory.

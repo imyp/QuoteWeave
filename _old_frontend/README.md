@@ -1,3 +1,5 @@
+## ARCHIVED: This frontend is no longer in use. Please refer to the `frontend-next` directory for the current frontend code.
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
