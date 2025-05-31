@@ -24,7 +24,6 @@ export default function EditProfilePage() {
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [bio, setBio] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
@@ -163,18 +162,6 @@ export default function EditProfilePage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-input/70 text-base"
-                disabled={isLoading}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="bio">Bio (Optional)</Label>
-              <Textarea
-                id="bio"
-                placeholder="Tell us a little about yourself..."
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                className="bg-input/70 text-base min-h-[100px]"
-                rows={4}
                 disabled={isLoading}
               />
             </div>
