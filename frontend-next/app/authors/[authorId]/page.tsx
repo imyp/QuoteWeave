@@ -295,10 +295,10 @@ export default function AuthorPage() {
                   id: collectionSimple.id,
                   name: collectionSimple.name,
                   description: undefined,
-                  isPublic: true,
+                  isPublic: collectionSimple.isPublic,
                   authorId: authorDetails.id,
                   authorName: authorDetails.name,
-                  quoteCount: 0,
+                  quoteCount: collectionSimple.quoteCount,
                 };
                 return (
                   <Card key={collectionEntry.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">

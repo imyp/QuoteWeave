@@ -392,6 +392,8 @@ export interface AuthorQuoteSimple {
 export interface AuthorCollectionSimple {
   id: number;
   name: string;
+  isPublic: boolean;
+  quoteCount: number;
 }
 
 export interface AuthorDetailsResponse {

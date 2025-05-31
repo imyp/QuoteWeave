@@ -262,7 +262,6 @@ def update_user_profile(
 def create_quote(
     conn: Connection, query: model.CreateQuoteQuery, author_name: str
 ) -> model.Quote:
-    quote_text_for_ml = f'"{query.text}" by {author_name}'
     quote_embedding = embedding.generate_embedding(query.text)
 
     with conn.cursor() as cur:
@@ -1060,13 +1059,13 @@ def update_collection(
                 "User is not authorized to update this collection"
             )
 
-        new_name = query.name if query.name is not None else current_name
-        new_description = (
+        _new_name = query.name if query.name is not None else current_name
+        _new_description = (
             query.description
             if query.description is not None
             else current_description
         )
-        new_is_public = (
+        _new_is_public = (
             query.is_public
             if query.is_public is not None
             else current_is_public
@@ -1460,40 +1459,6 @@ def user_remove_quote_from_collection(
         )
 
     return remove_quote_from_collection(conn, quote_id, collection_id)
-
-
-def get_collections_from_author(
-    conn: Connection, author_id: int
-) -> list[model.Collection]:
-    collections = []
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT c.id, c.author_id, a.name as author_name, c.name, c.description, c.is_public "
-            "FROM collection c JOIN author a ON c.author_id = a.id "
-            "WHERE c.author_id = %s ORDER BY c.name",
-            (author_id,),
-        )
-        for row in cur.fetchall():
-            collection_id = row[0]
-            cur.execute(
-                "SELECT COUNT(*) FROM collectioncontains WHERE collection_id = %s",
-                (collection_id,),
-            )
-            quote_count_row = cur.fetchone()
-            quote_count = quote_count_row[0] if quote_count_row else 0
-
-            collections.append(
-                model.Collection(
-                    id=collection_id,
-                    author_id=row[1],
-                    author_name=row[2],
-                    name=row[3],
-                    description=row[4],
-                    is_public=row[5],
-                    quote_count=quote_count,
-                )
-            )
-    return collections
 
 
 def remove_quote_from_collection(
