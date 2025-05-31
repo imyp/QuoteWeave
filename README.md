@@ -11,7 +11,7 @@ QuoteWeave: a site to create, find, and share quotes.
 ## Demo Credentials
 
 For demonstration purposes, you can use the following credentials:
-- **Username**: user
+- **Username** (must not contain any spaces): user
 - **Email**: user@example.com
 - **Password**: 123abc@XYZ
 
