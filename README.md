@@ -13,7 +13,7 @@ QuoteWeave: a site to create, find, and share quotes.
 For demonstration purposes, you can use the following credentials:
 - **Username**: user
 - **Email**: user@example.com
-- **Password**: 123abc@XUZ
+- **Password**: 123abc@XYZ
 
 ## Database Model (E/R Diagram)
 
