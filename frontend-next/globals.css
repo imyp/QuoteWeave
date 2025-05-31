@@ -17,7 +17,7 @@ body::after {
 }
 
 .dark body::after {
-  opacity: 0.35; /* Standard grain for dark mode */
+  opacity: 0.70; /* Standard grain for dark mode */
 }
 
 /* Vignette Effect - Scoped to .dark */
