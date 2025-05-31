@@ -84,6 +84,9 @@ The QuoteWeave web application:
 ### Collections (Light Mode)
 ![Collections](assets/light-mode-collections.png)
 
+### Collection Not Found / Private Access (Light Mode)
+![Collection Not Found / Private Access](assets/light-mode-collections-private-no-access.png)
+
 ## Project Repository
 The git repository for this project contains all source code, the E/R diagram, and this README file.
 

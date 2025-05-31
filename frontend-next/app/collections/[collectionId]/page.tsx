@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, notFound, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import {
   unfavoriteQuote
 } from '@/lib/api';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, LayersIcon, Loader2, QuoteIcon, TagsIcon, Terminal, UserCircle, Edit3Icon, Heart, LogIn } from "lucide-react";
+import { ArrowLeft, LayersIcon, Loader2, QuoteIcon, TagsIcon, UserCircle, Edit3Icon, Heart, LogIn, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 interface CollectionQuoteCardProps {
@@ -123,7 +123,7 @@ function CollectionQuoteCard({ quote, onOpenModal, onQuoteUpdate, authToken, isA
 export default function CollectionDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading, user } = useAuth();
   const collectionIdString = params.collectionId as string;
 
   const [collection, setCollection] = useState<CollectionDetails | null>(null);
@@ -166,9 +166,14 @@ export default function CollectionDetailsPage() {
     getCollectionById(numericCollectionId, authToken)
       .then(data => {
         if (!data) {
-          setError("Collection not found or could not be loaded.");
-          notFound();
+          setError("Hmm, this collection seems to have packed its bags and gone on vacation. Maybe it's sipping a coconut on a digital beach somewhere? We couldn't find it here!");
+          setCollection(null);
         } else {
+          if (!data.isPublic && (!isAuthenticated || !user || user.id !== data.authorId)) {
+            setError("Hmm, this collection seems to have packed its bags and gone on vacation. Maybe it's sipping a coconut on a digital beach somewhere? We couldn't find it here!");
+            setCollection(null);
+            return;
+          }
           console.log('[CollectionDetailsPage] Fetched collection data:', data);
           console.log('[CollectionDetailsPage] Quotes in fetched data:', data.quotes);
           setCollection(data);
@@ -176,13 +181,27 @@ export default function CollectionDetailsPage() {
       })
       .catch(err => {
         console.error(`Failed to load collection ${numericCollectionId}:`, err);
-        setError((err instanceof Error ? err.message : String(err)) || "Failed to load collection details.");
-        if (err instanceof Error && (err.message.includes("404") || err.message.toLowerCase().includes("not found"))) {
-          notFound();
+        const errorMsg = (err instanceof Error ? err.message : String(err)) || "Failed to load collection details.";
+        const lowerErrorMsg = errorMsg.toLowerCase();
+
+        if (
+          lowerErrorMsg.includes("404") ||
+          lowerErrorMsg.includes("not found") ||
+          lowerErrorMsg.includes("not authorized") ||
+          lowerErrorMsg.includes("unauthorized") ||
+          lowerErrorMsg.includes("permission denied") ||
+          lowerErrorMsg.includes("permission") ||
+          lowerErrorMsg.includes("forbidden") ||
+          lowerErrorMsg.includes("access denied")
+        ) {
+          setError("Hmm, this collection seems to have packed its bags and gone on vacation. Maybe it's sipping a coconut on a digital beach somewhere? We couldn't find it here!");
+          setCollection(null);
+        } else {
+          setError(errorMsg);
         }
       })
       .finally(() => setIsLoading(false));
-  }, [collectionIdString, authToken, authIsLoading, isAuthenticated]);
+  }, [collectionIdString, authToken, authIsLoading, isAuthenticated, user, router, params]);
 
   const handleOpenQuoteModal = (quote: QuotePageEntry) => {
     setSelectedQuote(quote);
@@ -207,15 +226,49 @@ export default function CollectionDetailsPage() {
     );
   }
 
+  if (error && error.startsWith("Hmm, this collection seems to have packed its bags")) {
+    return (
+      <section className="hero-immersive-grain relative flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] px-4 text-center bg-gradient-to-br from-sepia-hero-background-900 via-sepia-hero-background-950 to-sepia-hero-background-950 overflow-hidden">
+        <div className="relative z-10 scale-90 flex flex-col items-center">
+          <div className="mx-auto mb-8 animate-fadeInUp w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 bg-white/10 p-2 sm:p-2.5 shadow-xl rounded-sm transform rotate-[-5deg] transition-all hover:rotate-[-3deg] hover:scale-[1.02]">
+            <div className="bg-white/15 w-full h-full rounded-sm flex items-center justify-center">
+              <span className="text-4xl sm:text-5xl text-sepia-hero-text-300">🏝️</span>
+            </div>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl font-bold text-sepia-hero-text-100 mb-6 animate-fadeInUp delay-200ms">
+            Collection Gone on Vacation!
+          </h1>
+          <p className="text-lg sm:text-xl text-sepia-hero-text-300 max-w-xl md:max-w-2xl mx-auto mb-10 animate-fadeInUp delay-400ms">
+            {error}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fadeInUp delay-600ms">
+            <Button onClick={() => router.back()} variant="outline" size="lg" className="font-semibold text-lg border-2 border-sepia-hero-text-400 hover:border-sepia-hero-text-200 text-sepia-hero-text-200 hover:text-sepia-hero-text-100 transition-colors w-full sm:w-auto px-10 py-6">
+              <ArrowLeft className="mr-2 h-5 w-5" /> Go Back
+            </Button>
+            <Link href="/collections" passHref legacyBehavior>
+              <Button
+                size="lg"
+                className="font-semibold text-lg text-primary-foreground shadow-md hover:shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 w-full sm:w-auto px-10 py-6"
+                style={{ backgroundImage: 'var(--gradient-signup-button)' }}
+              >
+                Explore Other Collections
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8 min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
         <Alert variant="destructive" className="max-w-lg">
-          <Terminal className="h-4 w-4" />
+          <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Error Loading Collection</AlertTitle>
           <AlertDescription>
             {error}
-            {error.toLowerCase().includes("not found") && " This collection may not exist or you may not have permission to view it."}
           </AlertDescription>
           <div className="mt-4 flex gap-2">
             <Button onClick={() => router.back()} variant="outline">
@@ -266,15 +319,17 @@ export default function CollectionDetailsPage() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             All Collections
           </Button>
-          <div className="absolute top-0 right-0 text-sm md:top-2 md:right-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/collections/${collectionIdString}/edit`)}
-            >
-              <Edit3Icon className="mr-1.5 h-3.5 w-3.5" /> Edit Collection
-            </Button>
-          </div>
+          {isAuthenticated && user && collection && user.id === collection.authorId && (
+            <div className="absolute top-0 right-0 text-sm md:top-2 md:right-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/collections/${collectionIdString}/edit`)}
+              >
+                <Edit3Icon className="mr-1.5 h-3.5 w-3.5" /> Edit Collection
+              </Button>
+            </div>
+          )}
           <LayersIcon className="mx-auto h-12 w-12 text-primary mb-3" />
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl break-words">
             {collection.name}
