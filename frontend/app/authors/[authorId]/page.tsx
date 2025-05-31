@@ -294,63 +294,65 @@ export default function AuthorPage() {
           )}
         </div>
 
-        {authorDetails.collections && (
-          <div className="mb-10">
-            <h2 className="text-3xl font-bold mb-6 text-foreground">Collections</h2>
-            {collectionsToDisplay.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {collectionsToDisplay.map((collectionSimple) => {
-                  const collectionEntry: CollectionEntry = {
-                    id: collectionSimple.id,
-                    name: collectionSimple.name,
-                    description: undefined,
-                    isPublic: collectionSimple.isPublic,
-                    authorId: authorDetails.id,
-                    authorName: authorDetails.name,
-                    quoteCount: collectionSimple.quoteCount,
-                  };
-                  return (
-                    <Card key={collectionEntry.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
-                      <CardHeader className="pb-2 pt-4">
-                        <Link href={`/collections/${collectionEntry.id}`} passHref>
-                          <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
-                            {collectionEntry.name}
-                          </CardTitle>
-                        </Link>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0 text-sm text-muted-foreground flex-grow">
-                        {collectionEntry.description && (
-                          <p className="line-clamp-2 mb-2">
-                            {collectionEntry.description}
-                          </p>
-                        )}
-                        <Badge variant={collectionEntry.isPublic ? "default" : "secondary"} className="capitalize text-xs">
-                          {collectionEntry.isPublic ? "Public" : "Private"}
-                        </Badge>
-                      </CardContent>
-                      <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
-                        {collectionEntry.isPublic ? (
-                          <span>{collectionEntry.quoteCount} {collectionEntry.quoteCount === 1 ? "quote" : "quotes"}</span>
-                        ) : (
-                          <span className="italic">Private collection</span>
-                        )}
-                        <Link href={`/collections/${collectionEntry.id}`} passHref>
-                          <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
-                        </Link>
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
-              </div>
+        <div className="mb-10">
+          <h2 className="text-3xl font-bold mb-6 text-foreground">Collections</h2>
+          {collectionsToDisplay.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {collectionsToDisplay.map((collectionSimple) => {
+                const collectionEntry: CollectionEntry = {
+                  id: collectionSimple.id,
+                  name: collectionSimple.name,
+                  description: undefined,
+                  isPublic: collectionSimple.isPublic,
+                  authorId: authorDetails.id,
+                  authorName: authorDetails.name,
+                  quoteCount: collectionSimple.quoteCount,
+                };
+                return (
+                  <Card key={collectionEntry.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
+                    <CardHeader className="pb-2 pt-4">
+                      <Link href={`/collections/${collectionEntry.id}`} passHref>
+                        <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
+                          {collectionEntry.name}
+                        </CardTitle>
+                      </Link>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-sm text-muted-foreground flex-grow">
+                      {collectionEntry.description && (
+                        <p className="line-clamp-2 mb-2">
+                          {collectionEntry.description}
+                        </p>
+                      )}
+                      <Badge variant={collectionEntry.isPublic ? "default" : "secondary"} className="capitalize text-xs">
+                        {collectionEntry.isPublic ? "Public" : "Private"}
+                      </Badge>
+                    </CardContent>
+                    <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
+                      {collectionEntry.isPublic ? (
+                        <span>{collectionEntry.quoteCount} {collectionEntry.quoteCount === 1 ? "quote" : "quotes"}</span>
+                      ) : (
+                        <span className="italic">Private collection</span>
+                      )}
+                      <Link href={`/collections/${collectionEntry.id}`} passHref>
+                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
+                      </Link>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            (authorDetails.collections && authorDetails.collections.length > 0) ? (
+              <p className="text-muted-foreground italic">
+                {authorDetails.name} has no public collections.
+              </p>
             ) : (
-              !isCurrentUserAuthor && authorDetails.collections.length > 0 && (
-                <p className="text-muted-foreground italic">
-                  {authorDetails.name} has no public collections.
-                </p>
-              )
-            )}
-          </div>
-        )}
+              <p className="text-muted-foreground italic">
+                {authorDetails.name} has no collections yet.
+              </p>
+            )
+          )}
+        </div>
       </div>
 
       {selectedQuote && (
