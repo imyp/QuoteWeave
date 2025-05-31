@@ -43,23 +43,23 @@
   \draw (taggedas) -- (tag);
 
   % Author attributes
-  \matrix (m1) [attrib,left=.3cm of author]{\underline{id}\\name\\};
+  \matrix (m1) [attrib,left=.3cm of author]{\underline{aid}\\name\\};
   \foreach \i in {1,2} {\draw (m1-\i-1.east) -- (author);}
 
   % User attributes
-  \matrix (m2) [attrib,left=.3cm of user]{\underline{id}\\author\_id\\email\\password\_hash\\created\_at\\};
-  \foreach \i in {1,2,3,4,5} {\draw (m2-\i-1.east) -- (user);}
+  \matrix (m2) [attrib,left=.3cm of user]{email\\password\_hash\\};
+  \foreach \i in {1,2} {\draw (m2-\i-1.east) -- (user);}
 
   % Collection attributes
-  \matrix (m3) [attrib,right=.3cm of collection]{\underline{id}\\author\_id\\name\\description\\is\_public\\created\_at\\updated\_at\\};
-  \foreach \i in {1,2,3,4,5,6,7} {\draw (m3-\i-1.west) -- (collection);}
+  \matrix (m3) [attrib,right=.3cm of collection]{\underline{cid}\\name\\desc\\pub\\};
+  \foreach \i in {1,2,3,4} {\draw (m3-\i-1.west) -- (collection);}
 
   % Quote attributes
-  \matrix (m4) [attrib,right=.3cm of quote]{\underline{id}\\author\_id\\text\\is\_public\\embedding\\created\_at\\updated\_at\\};
-  \foreach \i in {1,2,3,4,5,6,7} {\draw (m4-\i-1.west) -- (quote);}
+  \matrix (m4) [attrib,right=.3cm of quote]{\underline{qid}\\text\\pub\\embedding\\};
+  \foreach \i in {1,2,3,4} {\draw (m4-\i-1.west) -- (quote);}
 
   % Tag attributes
-  \matrix (m5) [attrib,right=.3cm of tag]{\underline{id}\\name\\};
+  \matrix (m5) [attrib,right=.3cm of tag]{\underline{tid}\\name\\};
   \foreach \i in {1,2} {\draw (m5-\i-1.west) -- (tag);}
 
 \end{tikzpicture}
@@ -68,20 +68,18 @@
 
 The relations are shown below.
 
-\texttt{Author(id:integer, name:text)}
+\texttt{Author(aid:int, name:str)}
 
-\texttt{User(id:integer, author\_id:integer, email:text, password\_hash:text, created\_at:timestamptz)}
+\texttt{User(aid:int, email:str, password\_hash:str)}
 
-\texttt{Collection(id:integer, author\_id:integer, name:text, description:text, is\_public:boolean, created\_at:timestamptz, updated\_at:timestamptz)}
+\texttt{Collection(cid:int, aid:int, name:str, desc:str, pub:bool)}
 
-\texttt{Quote(id:integer, author\_id:integer, text:text, is\_public:boolean, embedding:vector, created\_at:timestamptz, updated\_at:timestamptz)}
+\texttt{Quote(qid:int, aid:int, text:str, pub:bool, embedding:list[float])}
 
-\texttt{TaggedAs(quote\_id:integer, tag\_id:integer)}
+\texttt{TaggedAs(qid:int, tid:int)}
 
-\texttt{Tag(id:integer, name:text)}
+\texttt{Tag(tid:int, name:str)}
 
-\texttt{UserQuoteFavorite(user\_id:integer, quote\_id:integer, created\_at:timestamptz)}
-
-\texttt{CollectionContains(collection\_id:integer, quote\_id:integer, added\_at:timestamptz)}
+\texttt{Favorites(aid:int, qid:int)}
 
 \end{document}
