@@ -1,0 +1,152 @@
+{
+  "metrics": {
+    "jaccard_score": 0.09777350427350427,
+    "semantic_similarity": 0.4498482942581177,
+    "combined_score": 0.6453952789306641
+  },
+  "examples": [
+    {
+      "text": "What tags or categories would best describe this quote: \"The sting of her abandonment had not lessen...",
+      "reference_tags": [
+        "love",
+        "relationship",
+        "suffering"
+      ],
+      "predicted_tags": [
+        "abandonment",
+        "sting"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.3197252154350281
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Everything that falls upon the eye is an ap...",
+      "reference_tags": [
+        "grief",
+        "loss",
+        "memory",
+        "remembering-the-good",
+        "time"
+      ],
+      "predicted_tags": [
+        "apparitions",
+        "dreams"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.30481234192848206
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"I don't hate Republicans as individuals. Bu...",
+      "reference_tags": [
+        "politics",
+        "republicans"
+      ],
+      "predicted_tags": [
+        "Americans",
+        "Republicans"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.8060073852539062
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Think More Not Less.\" by Jelani Payne? Prov...",
+      "reference_tags": [
+        "critical-thinking",
+        "perspective"
+      ],
+      "predicted_tags": [
+        "\"Think More Not Less.\""
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.2281753122806549
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Some individuals have the courage to make i...",
+      "reference_tags": [
+        "comfortable",
+        "dream",
+        "inspirational",
+        "journey",
+        "journeys",
+        "leadership",
+        "motivation",
+        "motivational",
+        "success"
+      ],
+      "predicted_tags": [
+        "courage",
+        "desire",
+        "dream"
+      ],
+      "jaccard_score": 0.09090909090909091,
+      "semantic_similarity": 0.6590588092803955
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Life is magic.I knew, without having to ask...",
+      "reference_tags": [
+        "life",
+        "magic"
+      ],
+      "predicted_tags": [
+        "magic",
+        "magic-quotes"
+      ],
+      "jaccard_score": 0.3333333333333333,
+      "semantic_similarity": 0.6183293461799622
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Books are all the dreams we would most like...",
+      "reference_tags": [
+        "books",
+        "victor-nell"
+      ],
+      "predicted_tags": [
+        "book",
+        "dream"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.4932630658149719
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"It is madness. But sometimes, madness is th...",
+      "reference_tags": [
+        "carry-on",
+        "madness",
+        "path-forward"
+      ],
+      "predicted_tags": [
+        "madness"
+      ],
+      "jaccard_score": 0.3333333333333333,
+      "semantic_similarity": 0.5340988636016846
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"I didn't care whether I had gotten dressed,...",
+      "reference_tags": [
+        "home",
+        "love"
+      ],
+      "predicted_tags": [
+        "hair",
+        "scenery"
+      ],
+      "jaccard_score": 0.0,
+      "semantic_similarity": 0.3194442391395569
+    },
+    {
+      "text": "What tags or categories would best describe this quote: \"Before you tell your life what you intend t...",
+      "reference_tags": [
+        "life",
+        "truth",
+        "values"
+      ],
+      "predicted_tags": [
+        "life",
+        "truths",
+        "values"
+      ],
+      "jaccard_score": 0.5,
+      "semantic_similarity": 0.9631111025810242
+    }
+  ]
+}

@@ -1,10 +1,11 @@
 import csv
+import os
 import typing
 
 from psycopg.connection import Connection
 
-import app.db as db
 import app.crud as crud
+import app.db as db
 import app.model as model
 
 
@@ -35,11 +36,16 @@ def extract_samples_from_file(filename: str, n: int) -> list[Entry]:
                 collection = ",".join(author_section[1:]).strip()
             if author == "":
                 author = "Unknown"
-            entry = Entry(quote=quote, author=author, collection=collection, tags=tags)
+            entry = Entry(
+                quote=quote, author=author, collection=collection, tags=tags
+            )
             entries.append(entry)
     if len(entries) != n:
-        raise ValueError(f"Tried to extract {n} entries, only found {len(entries)}")
+        raise ValueError(
+            f"Tried to extract {n} entries, only found {len(entries)}"
+        )
     return entries
+
 
 def add_entry_to_db(conn: Connection, entry: Entry):
     print(f"Adding entry {entry}")
@@ -48,7 +54,9 @@ def add_entry_to_db(conn: Connection, entry: Entry):
         author_query = model.CreateAuthorQuery(name=entry["author"])
         author = crud.create_author(conn, author_query)
         conn.commit()
-    quote_query = model.CreateQuoteQuery(author_id=author.id, text=entry["quote"], is_public=True)
+    quote_query = model.CreateQuoteQuery(
+        author_id=author.id, text=entry["quote"], is_public=True
+    )
     quote = crud.create_quote(conn, quote_query)
     conn.commit()
     for tag_name in entry["tags"]:
@@ -66,12 +74,13 @@ def add_entry_to_db(conn: Connection, entry: Entry):
                 user_id=author.id,
                 name=entry["collection"],
                 description="",
-                is_public=True
+                is_public=True,
             )
             collection = crud.create_collection(conn, collection_query)
             conn.commit()
         crud.add_quote_to_collection(conn, quote, collection)
         conn.commit()
+
 
 def populate_if_necessary(conn: Connection, filename: str, n: int):
     """Populate database with data from file if database contains no quotes."""
@@ -79,7 +88,9 @@ def populate_if_necessary(conn: Connection, filename: str, n: int):
     if response is None:
         raise ValueError("Not able to count entries.")
     if response[0] > 0:
-        print("Quotes were found in the table so database will not be populated.")
+        print(
+            "Quotes were found in the table so database will not be populated."
+        )
         return None
     print("Extracting entries from file.")
     entries = extract_samples_from_file(filename, n)
@@ -88,3 +99,31 @@ def populate_if_necessary(conn: Connection, filename: str, n: int):
         for entry in entries:
             add_entry_to_db(conn, entry)
     print("Done.")
+
+
+def init_db(conn: Connection):
+    """Initialize the database by executing schema.postgresql."""
+    schema_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "schema.postgresql"
+    )
+
+    if not os.path.exists(schema_path):
+        schema_path_alt = "/app/schema.postgresql"
+        if os.path.exists(schema_path_alt):
+            schema_path = schema_path_alt
+        else:
+            print(
+                f"Error: Schema file not found at {schema_path} or {schema_path_alt}. CWD: {os.getcwd()}"
+            )
+            raise FileNotFoundError(
+                f"Schema file not found. Looked in {schema_path} and {schema_path_alt}"
+            )
+
+    print(f"Initializing database with schema: {schema_path}")
+    with open(schema_path, "r", encoding="utf-8") as f:
+        sql_commands = f.read()
+
+    with conn.cursor() as cur:
+        cur.execute(sql_commands)
+    conn.commit()
+    print("Database schema initialized successfully.")

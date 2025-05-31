@@ -1,4 +1,0 @@
-fastapi[standard]
-psycopg[binary]
-pyjwt
-bcrypt

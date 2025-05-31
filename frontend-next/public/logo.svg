@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" width="100" height="120">
+  <!-- Polaroid Frame -->
+  <rect x="5" y="5" width="90" height="110" rx="3" ry="3" fill="var(--card, #fff)" stroke="var(--border, #ccc)" stroke-width="1" />
+
+  <!-- Inner "Photo" Area -->
+  <rect x="12.5" y="12.5" width="75" height="75" fill="var(--background, #f0f0f0)" />
+
+  <!-- Rainbow Arcs -->
+  <g stroke-width="6" fill="none">
+    <path d="M 20 70 A 30 30 0 0 1 80 70" stroke="#FF5A5A" /> <!-- Red -->
+    <path d="M 26 70 A 24 24 0 0 1 74 70" stroke="#FFB45A" /> <!-- Orange -->
+    <path d="M 32 70 A 18 18 0 0 1 68 70" stroke="#FFEE5A" /> <!-- Yellow -->
+    <path d="M 38 70 A 12 12 0 0 1 62 70" stroke="#5AFF7E" /> <!-- Green -->
+    <path d="M 44 70 A 6 6 0 0 1 56 70" stroke="#5A9EFF" />   <!-- Blue -->
+  </g>
+</svg>
