@@ -70,7 +70,7 @@ The QuoteWeave web application:
 -   **Interacts with the database via SQL**: The backend application uses SQL to perform CRUD (Create, Read, Update, Delete) operations on entities such as Quotes, Collections, Users, Authors, and Tags. These database interactions are managed by custom CRUD functions in `backend/app/crud.py` which use the `psycopg` library to directly execute SQL statements.
 -   **Performs regular expression matching**: The application supports regular expression matching for searching collections.
 -   **Semantic Tagging**: The application uses a FLAN-T5 small model, fine-tuned with a custom loss function, to automatically generate relevant tags for quotes. The model is hosted on Hugging Face at [fristrup/flan-t5-semantic-tagger-small](https://huggingface.co/fristrup/flan-t5-semantic-tagger-small). The tagging functionality is implemented in `backend/app/tagging.py`, and the model training process, including the custom loss function, is detailed in the Jupyter notebook `models/notebooks/flan_training.ipynb`.
--   **Theme Customization**: Users can choose between light, dark, or system default themes. This setting is accessible on the settings page (`localhost:3000/settings`) when logged in.
+-   **Theme Customization**: Users can choose between light, dark, or system default themes. This setting is accessible on the settings page (`localhost:3000/settings`).
 
 ## Screenshots
 
