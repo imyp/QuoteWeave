@@ -53,8 +53,8 @@ export default function AuthorsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <header className="mb-8">
-        <h1 className="text-4xl font-bold text-center text-gray-800 dark:text-white">Discover Authors</h1>
-        <p className="text-lg text-center text-gray-600 dark:text-gray-300 mt-2">Explore and connect with talented authors.</p>
+        <h1 className="text-4xl font-bold text-center text-primary">Discover Authors</h1>
+        <p className="text-lg text-center text-muted-foreground mt-2">Explore and connect with talented authors.</p>
       </header>
 
       <div className="mb-8 flex justify-center">
@@ -63,7 +63,7 @@ export default function AuthorsPage() {
 
       {isLoading ? (
         <div className="text-center py-12">
-          <p className="text-xl text-gray-500 dark:text-gray-400">Loading authors...</p>
+          <p className="text-xl text-muted-foreground">Loading authors...</p>
         </div>
       ) : authors.length > 0 ? (
         <>
