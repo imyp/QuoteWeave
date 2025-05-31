@@ -1,36 +1,22 @@
-import logging  # Added for logging
-import os  # Added for path joining
+import logging
+import os
 from typing import List
 
-import numpy as np  # Added for array operations
-import pandas as pd  # Added pandas
+import numpy as np
+import pandas as pd
 from fastembed import TextEmbedding
 
-from app.model import CSVMockQuote  # Import the new model
+from app.model import CSVMockQuote
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global variable for the embedding model
-embedding_model: TextEmbedding | None = None  # Type hint for clarity
+embedding_model: TextEmbedding | None = None
 
-# Global store for quotes and their embeddings from CSV
-# Using Dict[int, CSVMockQuote] to store quotes by their original CSV ID if available and unique,
-# otherwise, we might need to use a list and rely on index.
-# For simplicity, let's assume we'll use a list of CSVMockQuote objects.
 CSV_QUOTES_DATA: List[CSVMockQuote] = []
-CSV_QUOTE_EMBEDDINGS: np.ndarray | None = (
-    None  # Store as a single numpy array for efficient similarity calculation
-)
+CSV_QUOTE_EMBEDDINGS: np.ndarray | None = None
 
-# Path to the CSV file - constructing it relative to this file's directory might be fragile.
-# It's often better to use absolute paths derived from a base project directory or environment variables.
-# For this example, let's assume it's in backend/data/
-# The 'backend' directory is the workspace root for this operation.
-CSV_FILE_PATH = os.path.join(
-    "data", "quotes_sample.csv"
-)  # Relative to 'backend' directory
+CSV_FILE_PATH = os.path.join("data", "quotes_sample.csv")
 
 
 def load_embedding_model():
@@ -53,7 +39,7 @@ def load_quotes_and_generate_embeddings():
     global CSV_QUOTES_DATA, CSV_QUOTE_EMBEDDINGS, embedding_model
 
     if embedding_model is None:
-        load_embedding_model()  # Ensure model is loaded
+        load_embedding_model()
 
     if not os.path.exists(CSV_FILE_PATH):
         logger.warning(
@@ -66,18 +52,13 @@ def load_quotes_and_generate_embeddings():
     try:
         logger.info(f"Loading quotes from {CSV_FILE_PATH}...")
         df = pd.read_csv(CSV_FILE_PATH)
-        df = df.fillna(
-            ""
-        )  # Replace NaN with empty strings for Pydantic model compatibility
+        df = df.fillna("")
 
-        # Validate and store quotes
-        # Keep track of texts for batch embedding
         quote_texts_for_embedding = []
         valid_quotes_temp = []
 
         for index, row in df.iterrows():
             try:
-                # Ensure 'ID' is int if present, handle potential float from pandas
                 row_dict = row.to_dict()
                 if "ID" in row_dict and pd.notna(row_dict["ID"]):
                     try:
@@ -86,18 +67,14 @@ def load_quotes_and_generate_embeddings():
                         logger.warning(
                             f"Skipping row {index} due to invalid ID: {row_dict['ID']}. Must be integer."
                         )
-                        continue  # Skip this row
+                        continue
                 else:
-                    row_dict["ID"] = None  # or provide a default, e.g., index
+                    row_dict["ID"] = None
 
                 quote_model = CSVMockQuote(**row_dict)
                 valid_quotes_temp.append(quote_model)
-                quote_texts_for_embedding.append(
-                    quote_model.Quote
-                )  # Use the 'Quote' field for embedding
-            except (
-                Exception
-            ) as e:  # Catch Pydantic validation errors or others
+                quote_texts_for_embedding.append(quote_model.Quote)
+            except Exception as e:
                 logger.warning(
                     f"Skipping row {index} due to data validation error: {e}. Data: {row.to_dict()}"
                 )
@@ -108,11 +85,9 @@ def load_quotes_and_generate_embeddings():
             logger.info(
                 f"Generating embeddings for {len(CSV_QUOTES_DATA)} quotes..."
             )
-            # FastEmbed's embed method expects an iterable of documents.
             embeddings_generator = embedding_model.embed(
                 quote_texts_for_embedding
             )
-            # Convert generator to a list of numpy arrays, then stack into a single 2D numpy array
             embedding_list = [emb for emb in embeddings_generator]
             if embedding_list:
                 CSV_QUOTE_EMBEDDINGS = np.array(embedding_list)
@@ -138,9 +113,8 @@ def load_quotes_and_generate_embeddings():
         logger.error(
             f"Error processing CSV file or generating embeddings: {e}"
         )
-        CSV_QUOTES_DATA = []  # Clear data on error
+        CSV_QUOTES_DATA = []
         CSV_QUOTE_EMBEDDINGS = None
-        # Optionally re-raise or handle as a critical startup error
 
 
 def generate_embedding(text: str) -> List[float] | None:
@@ -164,7 +138,7 @@ def generate_embedding(text: str) -> List[float] | None:
         return None
 
     try:
-        if embedding_model is None:  # Double check after load attempt
+        if embedding_model is None:
             logger.error(
                 "Embedding model is not available after load attempt in generate_embedding."
             )
@@ -180,7 +154,7 @@ def generate_embedding(text: str) -> List[float] | None:
             return None
     except Exception as e:
         logger.error(f"Error during FastEmbed embedding generation: {e}")
-        return None  # Return None on error instead of raising, to allow graceful failure
+        return None
 
 
 def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
@@ -197,9 +171,7 @@ def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
             )
             return []
 
-    if not texts or not all(
-        isinstance(t, str) and t for t in texts
-    ):  # ensure strings are not empty
+    if not texts or not all(isinstance(t, str) and t for t in texts):
         logger.warning(
             "Invalid input for batch embedding (empty list or non-string/empty elements). Returning empty list."
         )
@@ -213,13 +185,12 @@ def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
 
     try:
         embeddings_generator = embedding_model.embed(texts)
-        # Filter out None embeddings if any happened, though FastEmbed usually yields arrays
         return [
             emb.tolist() for emb in embeddings_generator if emb is not None
         ]
     except Exception as e:
         logger.error(f"Error during FastEmbed batch embedding generation: {e}")
-        return []  # Return empty list on error
+        return []
 
 
 def search_similar_quotes(
@@ -230,7 +201,7 @@ def search_similar_quotes(
     This version is conceptual and demonstrates how one might structure a query
     for pgvector. It does not execute the query.
     """
-    if not CSV_QUOTES_DATA:  # Keep this check for the conceptual structure
+    if not CSV_QUOTES_DATA:
         logger.info(
             "No mock quote data available to conceptually search against. "
             "In a real scenario, this check might be different or removed if DB is primary source."
@@ -244,13 +215,8 @@ def search_similar_quotes(
         )
         return []
 
-    # Convert list to string format for pgvector query
     query_embedding_str = str(query_embedding_list)
 
-    # Conceptual pgvector query
-    # This is NOT executable code as-is. It's a string representing a SQL query.
-    # You would use a library like psycopg2 or SQLAlchemy to execute this.
-    # Assumes a table named 'items' with an 'embedding' column of type 'vector'.
     pgvector_query = f"SELECT id, quote, author, tags, 1 - (embedding <=> '{query_embedding_str}') AS cosine_similarity FROM items ORDER BY cosine_similarity DESC LIMIT {top_n};"
 
     logger.info(
@@ -261,9 +227,6 @@ def search_similar_quotes(
         "Actual database interaction code is required to fetch results."
     )
 
-    # Since we are not executing the query, we return an empty list.
-    # In a real implementation, you would execute the query and process the results.
-    # For example, results would be fetched and mapped to CSVMockQuote objects.
     return []
 
 

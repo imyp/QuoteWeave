@@ -1,8 +1,0 @@
-<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <pattern id="darkPattern" patternUnits="userSpaceOnUse" width="50" height="50">
-      <path d="M-10,10 l20,-20 M0,50 l50,-50 M40,60 l20,-20" stroke="oklch(0.4 0.04 70 / 0.1)" stroke-width="0.5"/>
-    </pattern>
-  </defs>
-  <rect width="100%" height="100%" fill="url(#darkPattern)" />
-</svg>

@@ -9,8 +9,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Edit3, Settings, Bookmark, BookOpen, LogIn, AlertTriangle, Loader2, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-
-// Import from lib/api.ts
 import {
   getCurrentUserProfile,
   getMyQuotes,
@@ -20,7 +18,6 @@ import {
   CollectionEntry
 } from "@/lib/api";
 
-// Re-added DisplayQuote interface
 interface DisplayQuote {
   id: number;
   text: string;
@@ -43,7 +40,6 @@ export default function UserProfilePage() {
     if (!isAuthenticated) {
       setError("Please log in to view your profile.");
       setIsLoading(false);
-      // Ensure userProfile is null if not authenticated
       setUserProfile(null);
       setUserQuotes([]);
       setUserCollections([]);
@@ -53,7 +49,6 @@ export default function UserProfilePage() {
     if (!authToken) {
         setError("Authentication token not found. Please log in again.");
         setIsLoading(false);
-        // Ensure userProfile is null if token is missing
         setUserProfile(null);
         setUserQuotes([]);
         setUserCollections([]);
@@ -114,7 +109,6 @@ export default function UserProfilePage() {
     );
   }
 
-  // Error state specifically when userProfile is null (critical error or not logged in)
   if (error && !userProfile) {
     return (
       <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
@@ -134,7 +128,6 @@ export default function UserProfilePage() {
     );
   }
 
-  // If auth is resolved, user is not authenticated, and there was no preceding critical error
   if (!authIsLoading && !isAuthenticated) {
      return (
       <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
@@ -152,11 +145,7 @@ export default function UserProfilePage() {
     );
   }
 
-  // If execution reaches here, userProfile should be available if authenticated.
-  // Add a specific check for userProfile for robustness before rendering profile data.
   if (!userProfile) {
-    // This case should ideally be covered by error or login prompts above.
-    // But if it somehow occurs, show a generic message or redirect.
     return (
         <div className="container mx-auto py-8 px-4 md:px-6 max-w-4xl min-h-[calc(100vh-4rem)] flex items-center justify-center">
             <Alert variant="default">
@@ -261,12 +250,12 @@ export default function UserProfilePage() {
                 {userCollections.slice(0, 4).map((collection) => (
                   <Link key={collection.id} href={`/collections/${collection.id}`} passHref>
                     <Card className="bg-background/70 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col group hover:border-primary/30 border border-transparent">
-                      <CardHeader className="p-4 pb-2">
-                        <CardTitle className="text-base font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">{collection.name}</CardTitle>
+                      <CardHeader className="p-4">
+                        <CardTitle className="text-lg font-medium group-hover:text-primary transition-colors truncate">{collection.name}</CardTitle>
+                        <CardDescription className="text-xs text-muted-foreground mt-1">
+                          {collection.isPublic ? 'Public' : 'Private'} • {collection.quoteCount || 0} quotes
+                        </CardDescription>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0 flex-grow">
-                        <p className="text-xs text-muted-foreground">{collection.quoteCount || 0} quotes</p>
-                      </CardContent>
                     </Card>
                   </Link>
                 ))}

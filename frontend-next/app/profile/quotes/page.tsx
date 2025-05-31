@@ -192,7 +192,7 @@ export default function UserProfileQuotesPage() {
             id: bq.id,
             text: bq.text,
             authorName: profileData.username,
-            authorId: bq.author_id,
+            authorId: bq.authorId,
             tags: bq.tags ? bq.tags.map((t: BackendTag) => t.name) : [],
             isFavorited: bq.isFavorited || false,
             favoriteCount: bq.favoriteCount || 0,

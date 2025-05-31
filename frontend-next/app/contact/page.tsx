@@ -21,11 +21,9 @@ export default function ContactPage() {
     setStatus('loading');
     setFeedbackMessage('');
 
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Mock success/error
-    if (email.includes("error")) { // Simple way to test error state
+    if (email.includes("error")) {
         setStatus('error');
         setFeedbackMessage('There was an issue sending your message. Please try again.');
     } else {
@@ -128,15 +126,6 @@ export default function ContactPage() {
           </div>
         </form>
       </div>
-
-      {/* <section className="text-center mt-16">
-        <p className="text-muted-foreground">
-          You can also find us on [Social Media Placeholder] or email us directly at <a href="mailto:contact@quoteweave.com" className="text-primary hover:underline">contact@quoteweave.com</a>.
-        </p>
-        <Link href="/" className="mt-4 inline-block text-primary hover:underline">
-          Back to Home
-        </Link>
-      </section> */}
     </div>
   );
 }

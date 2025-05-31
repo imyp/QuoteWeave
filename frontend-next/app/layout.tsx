@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "QuoteWeave",
   description: "A platform for sharing and discovering quotes.",
+  icons: {
+    icon: "/logo.ico",
+  },
 };
 
 export default function RootLayout({

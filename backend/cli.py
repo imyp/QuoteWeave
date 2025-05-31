@@ -83,7 +83,6 @@ def backfill_quotes_embeddings_and_tags(conn, batch_size: int = 32):
                     quote_embedding_vector = batch_embeddings[idx_in_batch]
 
                     try:
-                        # print(f"  Updating quote ID: {quote_id} - \"{quote_text[:30]}...\"") # More verbose logging
                         cur.execute(
                             "UPDATE quote SET embedding = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                             (quote_embedding_vector, quote_id),
@@ -110,9 +109,8 @@ def backfill_quotes_embeddings_and_tags(conn, batch_size: int = 32):
                                 print(
                                     f"    Skipping tag '{tag_name}' for quote ID {quote_id} due to: {ve_tag}"
                                 )
-                        # print(f"    Linked {linked_tags_count} tags for quote ID: {quote_id}") # More verbose
 
-                        conn.commit()  # Commit after each quote fully processed (embedding + tags)
+                        conn.commit()
                         quotes_processed += 1
                     except Exception as e_quote:
                         conn.rollback()
@@ -176,7 +174,7 @@ def main():
     )
     populate_full_parser.add_argument(
         "--csv-file",
-        default="data/quotes_sample.csv",  # Default to the sample CSV in the data directory
+        default="data/quotes_sample.csv",
         help="Path to the CSV file to use for quotes (relative to app root).",
     )
     populate_full_parser.add_argument(
@@ -214,9 +212,6 @@ def main():
     create_author_parser.add_argument(
         "--name", required=True, help="Author's name"
     )
-
-    # create_user_from_author_parser = create_subparser.add_parser("user-from-author", help="Create a new user from an existing author")
-    # ... (This command seems to have been removed or merged logic with 'user' previously, ensure consistency)
 
     create_user_parser = create_subparser.add_parser(
         "user", help="Create a new user (and author if doesn't exist)"
@@ -288,17 +283,13 @@ def main():
 
     args = parser.parse_args()
 
-    # Ensure APP_DIR is an absolute path to the /app directory where cli.py is located
-    # This assumes cli.py is in the root of the /app directory in the container.
-    APP_DIR = os.path.dirname(os.path.abspath(__file__))  # Should be /app
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
     if args.command == "init":
         with db.get_connection() as conn:
             populate.init_db(conn)
         print("Database initialized.")
     elif args.command == "populate":
-        # Ensure file path is absolute or relative to APP_DIR if not already.
-        # The populate.py script might handle this, but being explicit here can help.
         data_file_path = args.file
         if not os.path.isabs(data_file_path):
             data_file_path = os.path.join(APP_DIR, data_file_path)
@@ -307,31 +298,23 @@ def main():
             print(
                 f"Error: Data file for populate not found at {data_file_path}. CWD: {os.getcwd()}"
             )
-            return 1  # Indicate error
+            return 1
 
         with db.get_connection() as conn:
             populate.populate_if_necessary(
                 conn, data_file_path, args.n_entries
             )
     elif args.command == "populate-full":
-        # Construct paths relative to APP_DIR (/app)
-        # args.csv_file is 'data/quotes_sample.csv' by default or 'quotes_sample.csv' from prestart.sh
-        # args.sql_file_name is 'populate_quotes_database_full.sql'
-
         csv_relative_path = args.csv_file
-        if not csv_relative_path.startswith(
-            "data/"
-        ):  # Ensure it's in the data subdirectory
+        if not csv_relative_path.startswith("data/"):
             csv_input_path = os.path.join(
                 APP_DIR, "data", os.path.basename(csv_relative_path)
             )
         else:
             csv_input_path = os.path.join(APP_DIR, csv_relative_path)
 
-        # SQL file should be generated into the /app/data/ directory
         sql_output_path = os.path.join(APP_DIR, "data", args.sql_file_name)
 
-        # Create the data directory if it doesn't exist (though Docker COPY should handle it)
         os.makedirs(os.path.join(APP_DIR, "data"), exist_ok=True)
 
         print(f"CLI populate-full: Using CSV input: {csv_input_path}")
@@ -341,7 +324,7 @@ def main():
             print(
                 f"Error: CSV input file not found at {csv_input_path}. CWD: {os.getcwd()}"
             )
-            return 1  # Indicate error
+            return 1
 
         try:
             print(
@@ -361,15 +344,13 @@ def main():
             print(
                 f"CLI: Error during SQL file generation (generate_sql_from_csv call): {e}"
             )
-            # It's critical that generate_sql_from_csv doesn't fail silently if it's supposed to create the file.
-            # If generate_sql_from_csv itself handles errors and returns, the file might not be created.
-            return 1  # Indicate error
+            return 1
 
         if not os.path.exists(sql_output_path):
             print(
                 f"Error: SQL file not found at {sql_output_path} after generation attempt. CWD: {os.getcwd()}. Check logs from generate_sql_from_csv for errors (e.g., model download)."
             )
-            return 1  # Indicate error
+            return 1
         else:
             print(
                 f"CLI: Successfully verified generated SQL file exists at: {sql_output_path}"
@@ -396,7 +377,7 @@ def main():
                 print(
                     f"CLI: Error executing generated SQL file {sql_output_path}: {e}"
                 )
-                return 1  # Indicate error
+                return 1
 
     elif args.command == "backfill-quotes":
         with db.get_connection() as conn:
@@ -415,9 +396,6 @@ def main():
                         author = crud.create_author(conn, query)
                         print(f"Created author: {author}")
                     case "user":
-                        # Special handling for default admin user creation if that's the intent.
-                        # This is a bit of a heuristic. A more robust way would be a dedicated command
-                        # or environment variable for the initial admin password.
                         password_to_use = args.password
                         if (
                             args.name == "admin"
@@ -487,7 +465,6 @@ def main():
                             if author
                             else "Author not found."
                         )
-                    # Add other read commands here if needed, using new CRUD functions
                     case _:
                         read_parser.print_help()
             case _:

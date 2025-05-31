@@ -6,18 +6,18 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch"; // For notification toggles
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // For theme selection
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Bell, KeyRound, Palette, Save, Loader2, Terminal, CheckCircle, LogIn } from "lucide-react";
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useTheme } from "@/components/theme-provider"; // Use our re-exported useTheme
-import { useAuth } from "@/lib/auth"; // Import useAuth
+import { useTheme } from "@/components/theme-provider";
+import { useAuth } from "@/lib/auth";
 import {
   changePassword, ChangePasswordPayload,
   updateUserPreferences, UpdateUserPreferencesPayload,
-  getCurrentUserProfile, // Import to fetch current preferences
-  UserProfileResponse // Changed User to UserProfileResponse
+  getCurrentUserProfile,
+  UserProfileResponse
 } from '@/lib/api';
 
 export default function SettingsPage() {
@@ -53,10 +53,10 @@ export default function SettingsPage() {
     if (authToken) {
         setIsFetchingPreferences(true);
         getCurrentUserProfile(authToken)
-            .then((profile: UserProfileResponse) => { // Changed to UserProfileResponse
+            .then((profile: UserProfileResponse) => {
                 if (profile) {
-                    setEmailNotifications(profile.email_notifications ?? true); // Adjusted to UserProfileResponse structure
-                    setPushNotifications(profile.push_notifications ?? false); // Adjusted to UserProfileResponse structure
+                    setEmailNotifications(profile.emailNotifications ?? true);
+                    setPushNotifications(profile.pushNotifications ?? false);
                 }
             })
             .catch(err => {
@@ -90,16 +90,16 @@ export default function SettingsPage() {
     setIsSavingPassword(true);
 
     try {
-      const payload: ChangePasswordPayload = { current_password: currentPassword, new_password: newPassword };
+      const payload: ChangePasswordPayload = { currentPassword: currentPassword, newPassword: newPassword };
       await changePassword(payload, authToken);
       setPasswordSuccess("Password updated successfully!");
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setPasswordSuccess(null), 3000);
-    } catch (apiError: unknown) { // Changed to unknown type
+    } catch (apiError: unknown) {
       console.error("Password change API error:", apiError);
-      const message = (apiError instanceof Error) ? apiError.message : "Failed to update password. Please try again."; // Adjusted error handling
+      const message = (apiError instanceof Error) ? apiError.message : "Failed to update password. Please try again.";
       setPasswordError(message);
       setTimeout(() => setPasswordError(null), 5000);
     } finally {
@@ -117,17 +117,17 @@ export default function SettingsPage() {
     setPreferencesSuccess(null);
 
     const payload: UpdateUserPreferencesPayload = {
-      email_notifications: emailNotifications,
-      push_notifications: pushNotifications,
+      emailNotifications: emailNotifications,
+      pushNotifications: pushNotifications,
     };
 
     try {
       await updateUserPreferences(payload, authToken);
       setPreferencesSuccess("Preferences saved successfully!");
       setTimeout(() => setPreferencesSuccess(null), 3000);
-    } catch (apiError: unknown) { // Changed to unknown type
+    } catch (apiError: unknown) {
       console.error("Save preferences API error:", apiError);
-      const message = (apiError instanceof Error) ? apiError.message : "Failed to save preferences. Please try again."; // Adjusted error handling
+      const message = (apiError instanceof Error) ? apiError.message : "Failed to save preferences. Please try again.";
       setPreferencesError(message);
       setTimeout(() => setPreferencesError(null), 5000);
     } finally {
@@ -163,7 +163,6 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8 py-6">
-          {/* Change Password Section */}
           <form onSubmit={handlePasswordChange}>
             <Card className="bg-background/50">
               <CardHeader>
@@ -202,7 +201,6 @@ export default function SettingsPage() {
 
           <Separator />
 
-          {/* Notification Preferences Section */}
           <Card className="bg-background/50">
             <CardHeader>
               <CardTitle className="text-xl flex items-center"><Bell className="mr-2 h-5 w-5 text-primary" /> Notification Preferences</CardTitle>
@@ -243,7 +241,6 @@ export default function SettingsPage() {
 
           <Separator />
 
-          {/* Appearance Settings Section */}
           <Card className="bg-background/50">
             <CardHeader>
               <CardTitle className="text-xl flex items-center"><Palette className="mr-2 h-5 w-5 text-primary" /> Appearance</CardTitle>

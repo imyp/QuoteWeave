@@ -1,14 +1,15 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getCurrentUserProfile, UserProfileResponse } from '@/lib/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
+  user: UserProfileResponse | null;
   isLoading: boolean;
   login: (accessToken: string) => void;
   logout: () => void;
-  // Consider adding user object here if needed later
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,24 +18,50 @@ const AUTH_TOKEN_KEY = 'authToken';
 
 export const AuthProvider = ({ children }: { children: ReactNode }): React.JSX.Element => {
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start with loading true to check localStorage
+  const [user, setUser] = useState<UserProfileResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Ensure localStorage is accessed only on the client side
-    if (typeof window !== 'undefined') {
-      const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-      if (storedToken) {
-        setToken(storedToken);
+    const initializeAuth = async () => {
+      setIsLoading(true);
+      if (typeof window !== 'undefined') {
+        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (storedToken) {
+          setToken(storedToken);
+          try {
+            const userProfile = await getCurrentUserProfile(storedToken);
+            setUser(userProfile);
+          } catch (error) {
+            console.error("Failed to fetch user profile on init:", error);
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            setToken(null);
+            setUser(null);
+          }
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+    initializeAuth();
   }, []);
 
-  const login = (accessToken: string) => {
+  const login = async (accessToken: string) => {
+    setIsLoading(true);
     if (typeof window !== 'undefined') {
       localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
     }
     setToken(accessToken);
+    try {
+      const userProfile = await getCurrentUserProfile(accessToken);
+      setUser(userProfile);
+    } catch (error) {
+      console.error("Failed to fetch user profile on login:", error);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+      }
+      setToken(null);
+      setUser(null);
+    }
+    setIsLoading(false);
   };
 
   const logout = () => {
@@ -42,14 +69,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }): React.JSX.E
       localStorage.removeItem(AUTH_TOKEN_KEY);
     }
     setToken(null);
-    // Optionally redirect to home or login page
-    // window.location.href = '/login';
+    setUser(null);
   };
 
-  // Create the context value object separately
   const authContextValue: AuthContextType = {
-    isAuthenticated: !!token,
+    isAuthenticated: !!token && !!user,
     token,
+    user,
     login,
     logout,
     isLoading

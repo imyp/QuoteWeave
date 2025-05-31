@@ -31,9 +31,8 @@ function AuthorQuoteCard({ quote: initialQuote, onOpenModal, onQuoteUpdate, toke
   useEffect(() => {
     setQuote(prevQuote => {
       const baseState = { ...initialQuote };
-      // If not authenticated and quote was marked as favorited (e.g. from SSR or stale cache), mark as not favorited
       const updatedQuote = !isAuthenticated && baseState.isFavorited === true
-        ? { ...baseState, isFavorited: false, favoriteCount: Math.max(0, (baseState.favoriteCount || 0) - 1) } // Adjust count too if un-favoriting
+        ? { ...baseState, isFavorited: false, favoriteCount: Math.max(0, (baseState.favoriteCount || 0) - 1) }
         : baseState;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return prevQuote.id === updatedQuote.id ? { ...updatedQuote, _animateHeart: (prevQuote as any)._animateHeart } : updatedQuote;
@@ -45,8 +44,7 @@ function AuthorQuoteCard({ quote: initialQuote, onOpenModal, onQuoteUpdate, toke
     if (authIsLoading) return;
 
     if (!isAuthenticated || !token) {
-      // Consider using toast here if available and configured
-      console.log("Please log in to favorite quotes."); // Or use toast.info
+      console.log("Please log in to favorite quotes.");
       return;
     }
 
@@ -71,19 +69,13 @@ function AuthorQuoteCard({ quote: initialQuote, onOpenModal, onQuoteUpdate, toke
     try {
       if (newFavoriteStatus) {
         await favoriteQuote(quote.id, token);
-        // toast.success("Favorited!"); // If toast is available
       } else {
         await unfavoriteQuote(quote.id, token);
-        // toast.success("Unfavorited."); // If toast is available
       }
-      // No need to call onQuoteUpdate again if API call is successful, optimistic update is enough
-      // unless API returns slightly different data we need to sync. For now, assume optimistic is fine.
     } catch (error) {
       console.error("Failed to update favorite status on author page card", error);
-      // Revert optimistic update on error
       setQuote(originalQuoteState);
       onQuoteUpdate(originalQuoteState);
-      // toast.error("Failed to update favorite."); // If toast is available
     } finally {
       setIsFavoriting(false);
       setTimeout(() => setAnimateHeart(false), 400);
@@ -299,38 +291,37 @@ export default function AuthorPage() {
             <h2 className="text-3xl font-bold mb-6 text-foreground">Collections</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {authorDetails.collections.map((collectionSimple) => {
-                const collection: CollectionEntry = {
+                const collectionEntry: CollectionEntry = {
                   id: collectionSimple.id,
                   name: collectionSimple.name,
-                  description: "", // Default, not in AuthorCollectionSimple
-                  isPublic: false, // Default, not in AuthorCollectionSimple
-                  authorId: authorDetails.id, // From parent authorDetails
-                  authorName: authorDetails.name, // From parent authorDetails
-                  quoteCount: 0, // Default, not in AuthorCollectionSimple. This could be fetched if needed.
-                  // createdAt and updatedAt are also in CollectionEntry but not used by this card currently
+                  description: undefined,
+                  isPublic: true,
+                  authorId: authorDetails.id,
+                  authorName: authorDetails.name,
+                  quoteCount: 0,
                 };
                 return (
-                  <Card key={collection.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
+                  <Card key={collectionEntry.id} className="shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-card/80 backdrop-blur-sm hover:border-primary/30 border border-transparent">
                     <CardHeader className="pb-2 pt-4">
-                      <Link href={`/collections/${collection.id}`} passHref>
+                      <Link href={`/collections/${collectionEntry.id}`} passHref>
                         <CardTitle className="text-lg font-semibold hover:text-primary transition-colors truncate cursor-pointer">
-                          {collection.name}
+                          {collectionEntry.name}
                         </CardTitle>
                       </Link>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground flex-grow">
-                      {collection.description && (
+                      {collectionEntry.description && (
                         <p className="line-clamp-2 mb-2">
-                          {collection.description}
+                          {collectionEntry.description}
                         </p>
                       )}
-                      <Badge variant={collection.isPublic ? "default" : "secondary"} className="capitalize text-xs">
-                        {collection.isPublic ? "Public" : "Private"}
+                      <Badge variant={collectionEntry.isPublic ? "default" : "secondary"} className="capitalize text-xs">
+                        {collectionEntry.isPublic ? "Public" : "Private"}
                       </Badge>
                     </CardContent>
                     <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
-                      <span>{collection.quoteCount} {collection.quoteCount === 1 ? "quote" : "quotes"}</span>
-                      <Link href={`/collections/${collection.id}`} passHref>
+                      <span>{collectionEntry.quoteCount} {collectionEntry.quoteCount === 1 ? "quote" : "quotes"}</span>
+                      <Link href={`/collections/${collectionEntry.id}`} passHref>
                         <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
                       </Link>
                     </CardFooter>
@@ -348,7 +339,7 @@ export default function AuthorPage() {
             ...selectedQuote,
           }}
           onQuoteUpdate={(updatedApiQuote) => {
-            const { /* author, */ ...restOfQuote } = updatedApiQuote;
+            const { ...restOfQuote } = updatedApiQuote;
             handleQuoteUpdateOnPage({
               ...restOfQuote,
               authorId: selectedQuote.authorId,

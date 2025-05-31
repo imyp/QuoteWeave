@@ -14,8 +14,8 @@ import { toast } from "sonner";
 export default function TagsPage() {
   const { token, isLoading: authIsLoading } = useAuth();
   const [tags, setTags] = useState<TagEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For initial load / all tags
-  const [isSearching, setIsSearching] = useState(false); // For active search
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -23,7 +23,7 @@ export default function TagsPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const fetchedTags = await getAllTagsWithCounts(token); // Token might be used later
+      const fetchedTags = await getAllTagsWithCounts(token);
       setTags(fetchedTags || []);
     } catch (err) {
       console.error("Failed to fetch all tags:", err);
@@ -36,7 +36,6 @@ export default function TagsPage() {
 
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
-      // If search is cleared, fetch all tags again
       fetchAllTags();
       return;
     }
@@ -59,7 +58,7 @@ export default function TagsPage() {
 
   useEffect(() => {
     if (!authIsLoading) {
-      fetchAllTags(); // Fetch all tags on initial load after auth is resolved
+      fetchAllTags();
     }
   }, [authIsLoading, fetchAllTags]);
 
@@ -67,7 +66,6 @@ export default function TagsPage() {
     event.preventDefault();
     if (!searchTerm.trim()) {
         toast.info("Please enter a search term to find specific tags, or browse all tags below.");
-        // Optionally, if they submit empty, explicitly call fetchAllTags if tags are not already loaded
         if (tags.length === 0 && !isLoading) fetchAllTags();
         return;
     }
@@ -78,7 +76,6 @@ export default function TagsPage() {
     const newSearchTerm = event.target.value;
     setSearchTerm(newSearchTerm);
     if (newSearchTerm.trim() === '' && !authIsLoading) {
-      // If user clears the search, reload all tags
       fetchAllTags();
     }
   };
@@ -150,7 +147,7 @@ export default function TagsPage() {
             value={searchTerm}
             onChange={handleSearchChange}
             className="flex-grow text-base"
-            disabled={authIsLoading || isLoading } // Disable if initial load is happening
+            disabled={authIsLoading || isLoading }
           />
           <Button type="submit" disabled={authIsLoading || isSearching || isLoading }>
             {isSearching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}

@@ -19,7 +19,6 @@ COPY next.config.ts ./
 COPY . .
 
 # Build the Next.js application
-# The output: 'standalone' in next.config.mjs will ensure a standalone build.
 RUN pnpm run build
 
 # Stage 2: Serve the application with Node.js
@@ -30,9 +29,6 @@ WORKDIR /app
 
 # Set environment variables for Next.js server
 ENV NODE_ENV=production
-# Optionally, you can set HOSTNAME and PORT if your app needs them or if you want to override defaults
-# ENV HOSTNAME=0.0.0.0
-# ENV PORT=3000
 
 # Copy package.json and pnpm-lock.yaml to install only production dependencies
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./

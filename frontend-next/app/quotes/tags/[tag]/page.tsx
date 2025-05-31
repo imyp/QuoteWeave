@@ -1,30 +1,36 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, notFound, useRouter } from 'next/navigation';
+import { useParams, notFound, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { QuoteIcon, Terminal, Loader2, ArrowLeft } from "lucide-react";
-import { QuotePageEntry, searchQuotesByTag } from '@/lib/api'; // Assuming searchQuotesByTag exists or will be created
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { getPageIndices } from "@/lib/quote-utils";
+import { QuotePageEntry, searchQuotesByTag } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import QuoteCard from '@/components/quote-card';
+import QuoteDetailModal from '@/components/quote-detail-modal';
+import { Dialog } from "@/components/ui/dialog";
 
 export default function TaggedQuotesPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { token: authToken, isLoading: authIsLoading } = useAuth();
 
   const tag = params.tag as string;
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const [quotes, setQuotes] = useState<QuotePageEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1); // Example: for pagination if API supports it
-  const [totalPages, setTotalPages] = useState(1); // Example for pagination
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedQuoteForModal, setSelectedQuoteForModal] = useState<QuotePageEntry | null>(null);
 
-  const fetchTaggedQuotes = useCallback(async () => {
+  const fetchTaggedQuotes = useCallback(async (pageToFetch: number) => {
     if (!tag) {
       setError("Tag not specified.");
       setIsLoading(false);
@@ -40,7 +46,7 @@ export default function TaggedQuotesPage() {
     setError(null);
 
     try {
-      const result = await searchQuotesByTag(tag, page, 10, authToken);
+      const result = await searchQuotesByTag(tag, pageToFetch, 10, authToken);
       if (result.quotes) {
         setQuotes(result.quotes);
       }
@@ -48,7 +54,6 @@ export default function TaggedQuotesPage() {
         setTotalPages(result.totalPages);
       }
       if (!result.quotes || result.quotes.length === 0) {
-        // setError(`No quotes found for tag "${tag}".`); // This will show the error component, we want the "No Quotes Found" one
       }
 
     } catch (err) {
@@ -60,13 +65,31 @@ export default function TaggedQuotesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [tag, authToken, authIsLoading, page]);
+  }, [tag, authToken, authIsLoading]);
 
   useEffect(() => {
-    fetchTaggedQuotes();
-  }, [fetchTaggedQuotes]);
+    if (tag) {
+        fetchTaggedQuotes(currentPage);
+    }
+  }, [fetchTaggedQuotes, tag, currentPage]);
 
-  if (isLoading || (authIsLoading && !error)) {
+  const handleQuoteUpdate = (updatedQuote: QuotePageEntry) => {
+    setQuotes(currentQuotes =>
+      currentQuotes.map(q => q.id === updatedQuote.id ? updatedQuote : q)
+    );
+  };
+
+  const handleOpenModal = (quote: QuotePageEntry) => {
+    setSelectedQuoteForModal(quote);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedQuoteForModal(null);
+  };
+
+  const pageIndices = getPageIndices(currentPage, totalPages);
+
+  if (isLoading || (authIsLoading && !error && !quotes.length)) {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center items-center min-h-[calc(100vh-8rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -124,49 +147,48 @@ export default function TaggedQuotesPage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {quotes.map((quote) => (
-          <Card key={quote.id} className="bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-lg break-words">
-                <Link href={`/quotes/${quote.id}`} className="hover:text-primary transition-colors">
-                  &ldquo;{quote.text.length > 100 ? `${quote.text.substring(0, 97)}...` : quote.text}&rdquo;
-                </Link>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                {quote.authorName ? (
-                  <Link href={`/authors/${quote.authorId}`} className="hover:underline">
-                    {quote.authorName}
-                  </Link>
-                ) : (
-                  'Unknown Author'
-                )}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {quote.tags.map((t) => (
-                  <Link key={t} href={`/quotes/tags/${t.toLowerCase()}`}>
-                    <Badge variant="outline" className="hover:bg-accent transition-colors">{t}</Badge>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <QuoteCard
+            key={quote.id}
+            quote={quote}
+            onQuoteUpdate={handleQuoteUpdate}
+            onOpenModal={handleOpenModal}
+          />
         ))}
       </div>
-      {/* Basic Pagination (Example) */}
       {totalPages > 1 && (
-        <div className="mt-8 flex justify-center space-x-2">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <Button
-              key={p}
-              variant={p === page ? 'default' : 'outline'}
-              onClick={() => setPage(p)}
-              disabled={isLoading}
-            >
-              {p}
-            </Button>
-          ))}
-        </div>
+        <Pagination className="mt-12 pt-4 border-t border-border">
+          <PaginationContent>
+            {currentPage > 1 && (
+              <PaginationItem>
+                <PaginationPrevious href={`/quotes/tags/${tag}?page=${currentPage - 1}`} />
+              </PaginationItem>
+            )}
+            {pageIndices.map((value, index) => (
+              <PaginationItem key={index}>
+                {value === "..." ? (
+                  <PaginationEllipsis />
+                ) : (
+                  <PaginationLink href={`/quotes/tags/${tag}?page=${value}`} isActive={value === currentPage}>
+                    {value}
+                  </PaginationLink>
+                )}
+              </PaginationItem>
+            ))}
+            {currentPage < totalPages && (
+              <PaginationItem>
+                <PaginationNext href={`/quotes/tags/${tag}?page=${currentPage + 1}`} />
+              </PaginationItem>
+            )}
+          </PaginationContent>
+        </Pagination>
+      )}
+      {selectedQuoteForModal && (
+        <Dialog open={!!selectedQuoteForModal} onOpenChange={(open) => { if (!open) handleCloseModal(); }}>
+          <QuoteDetailModal
+            quote={selectedQuoteForModal}
+            onQuoteUpdate={handleQuoteUpdate}
+          />
+        </Dialog>
       )}
     </div>
   );

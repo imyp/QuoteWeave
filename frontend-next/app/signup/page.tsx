@@ -9,24 +9,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UserPlus, Terminal, Loader2, CheckCircle } from "lucide-react";
-import { registerUser, CreateUserPayload } from "@/lib/api"; // Import registerUser and CreateUserPayload
-
-// Mock API function for signup (Removed)
-// async function submitSignup(payload: { username: string, email: string, password?: string }): Promise<{ success: boolean; message: string; error?: string }> {
-//   console.log("API CALL (mock): Signing up with:", payload);
-//   await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-
-//   if (!payload.username || !payload.email || !payload.password) {
-//     return { success: false, message: "All fields are required.", error: "missing_fields" };
-//   }
-//   if (payload.username.toLowerCase() === "existinguser" || payload.email.toLowerCase() === "existing@example.com") {
-//     return { success: false, message: "Username or email already taken.", error: "user_exists" };
-//   }
-//   if (payload.username.toLowerCase().includes("fail")){
-//     return { success: false, message: "Signup failed due to server validation.", error: "server_validation_fail" };
-//   }
-//   return { success: true, message: "Account created successfully! Please log in." };
-// }
+import { registerUser, CreateUserPayload } from "@/lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -49,9 +32,8 @@ export default function SignupPage() {
       await registerUser(payload);
       setSuccessMessage("Account created successfully! Redirecting to login...");
       setTimeout(() => {
-        router.push('/login?signupSuccess=true'); // Redirect to login page with a success indicator
+        router.push('/login?signupSuccess=true');
       }, 2000);
-      // Clear form on success
       setUsername('');
       setEmail('');
       setPassword('');

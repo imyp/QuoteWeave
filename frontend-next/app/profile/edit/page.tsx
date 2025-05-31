@@ -26,7 +26,7 @@ export default function EditProfilePage() {
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
 
-  const [isLoading, setIsLoading] = useState(false); // For form submission
+  const [isLoading, setIsLoading] = useState(false);
   const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -40,7 +40,6 @@ export default function EditProfilePage() {
     if (!isAuthenticated) {
       setError("Please log in to edit your profile.");
       setIsFetchingInitialData(false);
-      // router.push('/login'); // Optionally redirect immediately
       return;
     }
 
@@ -56,8 +55,6 @@ export default function EditProfilePage() {
         if (profile) {
             setUsername(profile.username);
             setEmail(profile.email);
-            // Bio is not part of UserProfileResponse. Assuming it's a local or separate state.
-            // setBio(profile.bio || '');
         }
       })
       .catch(err => {
@@ -81,14 +78,11 @@ export default function EditProfilePage() {
 
     try {
       const payload: UpdateUserProfilePayload = { username, email };
-      // If bio were part of the backend UpdateUserProfilePayload, you would include it:
-      // payload.bio = bio; // Example if bio was a field in UpdateUserProfilePayload
 
       const updatedProfile = await updateUserProfile(payload, authToken);
       setSuccessMessage("Profile updated successfully!");
       setUsername(updatedProfile.username);
       setEmail(updatedProfile.email);
-      // setBio if it were part of the response and payload
 
       setTimeout(() => {
         router.push('/profile');
@@ -108,7 +102,6 @@ export default function EditProfilePage() {
     );
   }
 
-  // If finished loading initial data and not authenticated, or critical error during fetch
   if ((!authIsLoading && !isAuthenticated) || (error && !username && !email) ){
      return (
       <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">

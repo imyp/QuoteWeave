@@ -162,13 +162,15 @@ export default function CollectionDetailsPage() {
     setIsLoading(true);
     setError(null);
 
-    console.log('[CollectionDetailsPage] useEffect - authIsLoading:', authIsLoading, 'isAuthenticated:', isAuthenticated, 'authToken:', authToken ? 'present' : authToken); // DEBUG
+    console.log('[CollectionDetailsPage] useEffect - authIsLoading:', authIsLoading, 'isAuthenticated:', isAuthenticated, 'authToken:', authToken ? 'present' : authToken);
     getCollectionById(numericCollectionId, authToken)
       .then(data => {
         if (!data) {
           setError("Collection not found or could not be loaded.");
           notFound();
         } else {
+          console.log('[CollectionDetailsPage] Fetched collection data:', data);
+          console.log('[CollectionDetailsPage] Quotes in fetched data:', data.quotes);
           setCollection(data);
         }
       })
@@ -180,7 +182,7 @@ export default function CollectionDetailsPage() {
         }
       })
       .finally(() => setIsLoading(false));
-  }, [collectionIdString, authToken, authIsLoading]);
+  }, [collectionIdString, authToken, authIsLoading, isAuthenticated]);
 
   const handleOpenQuoteModal = (quote: QuotePageEntry) => {
     setSelectedQuote(quote);

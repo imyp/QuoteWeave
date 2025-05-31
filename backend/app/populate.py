@@ -103,17 +103,11 @@ def populate_if_necessary(conn: Connection, filename: str, n: int):
 
 def init_db(conn: Connection):
     """Initialize the database by executing schema.postgresql."""
-    # Assuming schema.postgresql is in the root of the backend app directory (/app in Docker)
-    # If cli.py is in /app/ and populate.py is in /app/app/, then schema.postgresql
-    # should be at /app/schema.postgresql
     schema_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "schema.postgresql"
     )
-    # Correct path if populate.py is in /app/app/ and schema.postgresql is in /app/
 
     if not os.path.exists(schema_path):
-        # Fallback if the above relative path is tricky due to execution context
-        # Inside the backend container, WORKDIR is /app, so schema.postgresql should be at /app/schema.postgresql
         schema_path_alt = "/app/schema.postgresql"
         if os.path.exists(schema_path_alt):
             schema_path = schema_path_alt
@@ -130,8 +124,6 @@ def init_db(conn: Connection):
         sql_commands = f.read()
 
     with conn.cursor() as cur:
-        # Execute the entire script as one block.
-        # Splitting by ';' can be problematic if ';' is used inside functions/procedures definitions (like in schema.postgresql)
         cur.execute(sql_commands)
     conn.commit()
     print("Database schema initialized successfully.")

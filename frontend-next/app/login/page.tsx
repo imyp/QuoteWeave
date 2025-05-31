@@ -12,20 +12,6 @@ import { LogInIcon, Terminal, Loader2, CheckCircle } from "lucide-react";
 import { loginUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-// Mock API function for login
-// async function submitLogin(payload: { username?: string, email?: string, password?: string }): Promise<{ success: boolean; message: string; error?: string }> {
-//   console.log("API CALL (mock): Logging in with:", payload);
-//   await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-
-//   if ((payload.username === "user" || payload.email === "user@example.com") && payload.password === "password123") {
-//     return { success: true, message: "Login successful! Redirecting..." };
-//   }
-//   if (payload.username?.toLowerCase().includes("fail")){
-//     return { success: false, message: "Login failed. Server validation error.", error: "server_validation_fail" };
-//   }
-//   return { success: false, message: "Invalid username or password.", error: "invalid_credentials" };
-// }
-
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,8 +56,8 @@ function LoginContent() {
 
     try {
       const tokenResponse = await loginUser(identifier, password);
-      if (tokenResponse.access_token) {
-        authLogin(tokenResponse.access_token);
+      if (tokenResponse.accessToken) {
+        authLogin(tokenResponse.accessToken);
         setSuccessMessage("Login successful! Redirecting...");
       } else {
         throw new Error('Access token not found in response');
@@ -92,10 +78,9 @@ function LoginContent() {
     }
   };
 
-  // Function to toggle between username and email login
   const toggleLoginType = () => {
     setIsEmailLogin(!isEmailLogin);
-    setIdentifier(''); // Reset identifier field on toggle
+    setIdentifier('');
     setError(null);
   };
 

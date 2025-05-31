@@ -33,8 +33,6 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle, Loader2, Save, Terminal, Edit, Trash2Icon, Sparkles, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
-// const MOCK_AUTH_TOKEN = "mock-jwt-token-for-dev"; // Removed
-
 export default function EditQuotePage() {
   const router = useRouter();
   const params = useParams();
@@ -57,14 +55,14 @@ export default function EditQuotePage() {
 
   useEffect(() => {
     if (authIsLoading) {
-        setIsFetching(true);
-        return;
+      setIsFetching(true);
+      return;
     }
 
     if (!isAuthenticated) {
-        setError("You must be logged in to edit a quote.");
-        setIsFetching(false);
-        return;
+      setError("You must be logged in to edit a quote.");
+      setIsFetching(false);
+      return;
     }
 
     if (quoteIdString) {
@@ -112,13 +110,13 @@ export default function EditQuotePage() {
       return;
     }
     if (!authorName.trim()) {
-        setError("Please enter author name to generate tags.");
-        setTimeout(() => setError(null), 3000);
-        return;
+      setError("Please enter author name to generate tags.");
+      setTimeout(() => setError(null), 3000);
+      return;
     }
     if (!isAuthenticated) {
-        setError("Please log in to generate tags.");
-        return;
+      setError("Please log in to generate tags.");
+      return;
     }
 
     setIsGeneratingTags(true);
@@ -139,12 +137,12 @@ export default function EditQuotePage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!originalQuote) {
-        setError("Original quote data is missing. Cannot update.");
-        return;
+      setError("Original quote data is missing. Cannot update.");
+      return;
     }
     if (!isAuthenticated || !authToken) {
-        setError("You must be logged in to update a quote. Token is missing.");
-        return;
+      setError("You must be logged in to update a quote. Token is missing.");
+      return;
     }
     setIsLoading(true);
     setError(null);
@@ -159,9 +157,9 @@ export default function EditQuotePage() {
     const finalPayload = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)) as UpdateQuotePayload;
 
     if (Object.keys(finalPayload).length === 0) {
-        setSuccessMessage("No changes detected to save.");
-        setIsLoading(false);
-        return;
+      setSuccessMessage("No changes detected to save.");
+      setIsLoading(false);
+      return;
     }
 
     if (isNaN(numericQuoteId)) {
@@ -190,8 +188,8 @@ export default function EditQuotePage() {
 
   const handleDeleteQuote = async () => {
     if (!isAuthenticated || !authToken) {
-        setError("You must be logged in to delete a quote. Token is missing.");
-        return;
+      setError("You must be logged in to delete a quote. Token is missing.");
+      return;
     }
     setIsDeleting(true);
     setError(null);
@@ -223,36 +221,36 @@ export default function EditQuotePage() {
 
   if (error && !originalQuote && !isLoading && !isDeleting) {
     return (
-       <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl text-center">
-         <Alert variant="destructive">
-           <Terminal className="h-4 w-4" />
-           <AlertTitle>Error Loading Quote Data</AlertTitle>
-           <AlertDescription>{error}</AlertDescription>
-         </Alert>
-         <Button onClick={() => router.back()} className="mt-4" variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl text-center">
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error Loading Quote Data</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={() => router.back()} className="mt-4" variant="outline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
         </Button>
         {!isAuthenticated && !authIsLoading && (
-            <Button onClick={() => router.push('/login')} className="mt-4 ml-2">
-                <LogIn className="mr-2 h-4 w-4" /> Login
-            </Button>
+          <Button onClick={() => router.push('/login')} className="mt-4 ml-2">
+            <LogIn className="mr-2 h-4 w-4" /> Login
+          </Button>
         )}
-       </div>
+      </div>
     );
   }
 
   if (!originalQuote && !isFetching && !authIsLoading) {
-     return (
-       <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl text-center">
-         <Alert variant="destructive">
-           <Terminal className="h-4 w-4" />
-           <AlertTitle>Quote Not Found</AlertTitle>
-           <AlertDescription>{error || "The quote you are trying to edit could not be found."}</AlertDescription>
-         </Alert>
-         <Button onClick={() => router.push('/')} className="mt-4" variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+    return (
+      <div className="container mx-auto py-8 px-4 md:px-6 max-w-2xl text-center">
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Quote Not Found</AlertTitle>
+          <AlertDescription>{error || "The quote you are trying to edit could not be found."}</AlertDescription>
+        </Alert>
+        <Button onClick={() => router.push('/')} className="mt-4" variant="outline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
         </Button>
-       </div>
+      </div>
     );
   }
 
@@ -274,7 +272,7 @@ export default function EditQuotePage() {
           <Edit className="mx-auto h-8 w-8 text-primary mb-2" />
           <CardTitle className="text-3xl font-bold text-center">Edit Quote</CardTitle>
           <CardDescription className="text-center pt-1">
-            Refine the wisdom. Make your changes below for &ldquo;{originalQuote.text.substring(0,50)}...&rdquo;.
+            Refine the wisdom. Make your changes below for &ldquo;{originalQuote.text.substring(0, 50)}...&rdquo;.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -334,8 +332,8 @@ export default function EditQuotePage() {
                 className="mt-1 text-xs justify-start px-1 text-primary hover:text-primary/80"
                 disabled={!quoteText.trim() || !authorName.trim() || isLoading || isDeleting || isGeneratingTags || isFetching}
               >
-                {isGeneratingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
-                 Auto-generate Tags (AI)
+                {isGeneratingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                Auto-generate Tags (AI)
               </Button>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2 p-2 border border-border/50 rounded-md bg-background/30 min-h-[40px]">
@@ -362,7 +360,7 @@ export default function EditQuotePage() {
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>
                   {isDeleting ? 'Deletion Failed' :
-                   (isLoading && !isFetching) ? 'Update Failed' : 'Error'}
+                    (isLoading && !isFetching) ? 'Update Failed' : 'Error'}
                 </AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -396,30 +394,30 @@ export default function EditQuotePage() {
                     disabled={isDeleting}
                     className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                   >
-                    {isDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Deleting...</> : "Yes, delete quote"}
+                    {isDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : "Yes, delete quote"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
 
             <div className="flex space-x-3">
-                <Link href={`/quotes/${quoteIdString}`} passHref>
-                    <Button variant="outline" type="button" disabled={isLoading || isDeleting || isFetching}>
-                        Cancel
-                    </Button>
-                </Link>
-                <Button
-                  type="submit"
-                  className="font-semibold text-primary-foreground shadow-md hover:shadow-lg transition-shadow duration-150 ease-in-out"
-                  style={{ backgroundImage: 'var(--gradient-primary-button)' }}
-                  disabled={isLoading || isDeleting || isFetching || isGeneratingTags}
-                >
-                  {isLoading ? (
-                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Saving Changes...</>
-                  ) : (
-                    <><Save className="mr-2 h-5 w-5" /> Save Changes</>
-                  )}
+              <Link href={`/quotes/${quoteIdString}`} passHref>
+                <Button variant="outline" type="button" disabled={isLoading || isDeleting || isFetching}>
+                  Cancel
                 </Button>
+              </Link>
+              <Button
+                type="submit"
+                className="font-semibold text-primary-foreground shadow-md hover:shadow-lg transition-shadow duration-150 ease-in-out"
+                style={{ backgroundImage: 'var(--gradient-primary-button)' }}
+                disabled={isLoading || isDeleting || isFetching || isGeneratingTags}
+              >
+                {isLoading ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Saving Changes...</>
+                ) : (
+                  <><Save className="mr-2 h-5 w-5" /> Save Changes</>
+                )}
+              </Button>
             </div>
           </CardFooter>
         </form>

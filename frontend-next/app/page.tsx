@@ -5,7 +5,6 @@ import { BookOpen, Feather, Users } from "lucide-react";
 export default function LandingPage() {
   return (
     <>
-      {/* Hero Section */}
       <section className="hero-immersive-grain relative flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] px-4 text-center bg-gradient-to-br from-sepia-hero-background-900 via-sepia-hero-background-950 to-sepia-hero-background-950 pt-16 pb-24 overflow-hidden">
         <div className="scale-90 bg-white/10 p-6 sm:p-8 md:p-12 shadow-xl rounded-sm transform rotate-[-2deg] transition-all hover:rotate-[-1deg] hover:scale-[1.01] flex flex-col aspect-[4/5]">
           <div className="bg-white/15 p-2 sm:p-3 md:p-6 rounded-sm aspect-square flex flex-col justify-center">
@@ -48,7 +47,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="py-20 px-4 bg-muted/30 dark:bg-muted/20 overflow-hidden">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 animate-fadeInUp">
@@ -83,7 +81,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Final Call to Action / Footer Placeholder */}
       <section className="py-20 px-4 text-center bg-gradient-to-t from-background to-muted/50 dark:from-background dark:to-muted/30 overflow-hidden">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-8 animate-fadeInUp">
             Ready to Weave Your Wisdom?

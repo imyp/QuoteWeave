@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AuthorCard } from '@/components/author-card';
 import { AuthorSearch } from '@/components/author-search';
-import { getAuthors, AuthorEntry, PaginatedAuthorsResponse } from '@/lib/api'; // Updated import
-import { Button } from '@/components/ui/button'; // For pagination
-import { toast } from 'sonner'; // For error notifications
+import { getAuthors, AuthorEntry, PaginatedAuthorsResponse } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
-const ITEMS_PER_PAGE = 12; // Or your preferred number
+const ITEMS_PER_PAGE = 12;
 
 export default function AuthorsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,13 +23,13 @@ export default function AuthorsPage() {
       const skip = (page - 1) * ITEMS_PER_PAGE;
       const response: PaginatedAuthorsResponse = await getAuthors(search, ITEMS_PER_PAGE, skip);
       setAuthors(response.authors);
-      setTotalPages(response.total_pages);
-      setTotalItems(response.total_items || 0);
+      setTotalPages(response.totalPages);
+      setTotalItems(response.totalItems || 0);
       setCurrentPage(page);
     } catch (error) {
       console.error("Failed to fetch authors:", error);
       toast.error("Failed to load authors", { description: error instanceof Error ? error.message : "Please try again later." });
-      setAuthors([]); // Clear authors on error
+      setAuthors([]);
       setTotalPages(0);
       setTotalItems(0);
     }
@@ -37,13 +37,11 @@ export default function AuthorsPage() {
   }, []);
 
   useEffect(() => {
-    fetchAuthors(1, searchTerm); // Fetch first page on initial load or search term change
+    fetchAuthors(1, searchTerm);
   }, [searchTerm, fetchAuthors]);
 
   const handleSearch = (term: string) => {
     setSearchTerm(term);
-    // Reset to page 1 when search term changes, useEffect will trigger fetch
-    // setCurrentPage(1); // No, let useEffect handle it via searchTerm change
   };
 
   const handlePageChange = (newPage: number) => {
@@ -66,16 +64,11 @@ export default function AuthorsPage() {
       {isLoading ? (
         <div className="text-center py-12">
           <p className="text-xl text-gray-500 dark:text-gray-400">Loading authors...</p>
-          {/* TODO: Add a spinner component here */}
         </div>
       ) : authors.length > 0 ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {authors.map(author => (
-              // Assuming AuthorCard takes an 'author' prop of type AuthorEntry
-              // The AuthorCard expects: id, username, bio (optional), avatarUrl (optional)
-              // Our AuthorEntry from API provides: id, name. We map name to username.
-              // Bio and avatarUrl will be undefined, which AuthorCard should handle.
               <AuthorCard key={author.id} author={{ ...author, username: author.name }} />
             ))}
           </div>

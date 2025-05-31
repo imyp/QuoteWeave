@@ -56,11 +56,8 @@ export default function CreateCollectionPage() {
       toast.success('Collection created!', {
         description: `Successfully created "${newCollection.name}".`,
       });
-      // Redirect to the new collection's page (assuming a route like /collections/[id])
-      // Or to a general collections list page
-      router.push(`/collections`); // Or router.push(`/collections/${newCollection.id}`);
+      router.push(`/collections`);
     } catch (error) {
-      // Error is already toasted by fetchApi, but we can log it or add specific UI reaction here
       console.error("Failed to create collection:", error);
     } finally {
       setIsSubmitting(false);
@@ -72,7 +69,6 @@ export default function CreateCollectionPage() {
   }
 
   if (!isAuthenticated) {
-    // Optionally, show a message and a link to login, or redirect
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <p className="mb-4">Please log in to create a collection.</p>

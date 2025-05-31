@@ -46,7 +46,6 @@ def get_or_create_author_by_name(conn: Connection, name: str) -> model.Author:
     author = get_author_by_name(conn, name)
     if author:
         return author
-    # If author doesn't exist, create them
     return create_author(conn, model.CreateAuthorQuery(name=name))
 
 
@@ -123,16 +122,22 @@ def get_user_by_email(conn: Connection, email: str) -> model.User | None:
 
 def get_user_by_id(conn: Connection, user_id: int) -> model.User | None:
     response = conn.execute(
-        'SELECT "user".id, author.name, "user".email, "user".password_hash FROM "user" '
-        'JOIN author ON "user".author_id = author.id WHERE "user".id = %s',
+        'SELECT u.id, u.author_id, a.name as username, u.email, u.password_hash FROM "user" u '
+        "JOIN author a ON u.author_id = a.id WHERE u.id = %s",
         (user_id,),
     ).fetchone()
     if response is None:
         return None
-    user_id_from_db, username, email_from_db, password_hash_val = response
-    # Ensure we are using the correct user_id that was queried for, not potentially author_id if columns were mixed up
+    (
+        user_id_from_db,
+        author_id_val,
+        username,
+        email_from_db,
+        password_hash_val,
+    ) = response
     return model.User(
         id=user_id_from_db,
+        author_id=author_id_val,
         username=username,
         email=email_from_db,
         password_hash=password_hash_val,
@@ -168,20 +173,6 @@ def update_user_password(
 def update_user_preferences(
     conn: Connection, user_id: int, payload: model.UpdateUserProfilePayload
 ) -> model.UserResponse:
-    # This function currently mocks the update as DB schema changes are needed for preference columns.
-    # The User model in model.py has been updated with email_notifications and push_notifications.
-    # Next steps:
-    # 1. Create a database migration (e.g., using Alembic) to add these columns to the "user" table.
-    # 2. Implement the actual database UPDATE logic here.
-    #    Example for SQLAlchemy (actual implementation depends on DB access layer):
-    #    db_user = get_user_by_id_somehow(conn, user_id) # Assuming a way to get a mutable user object
-    #    if payload.email_notifications is not None:
-    #        db_user.email_notifications = payload.email_notifications
-    #    if payload.push_notifications is not None:
-    #        db_user.push_notifications = payload.push_notifications
-    #    conn.commit() # Or equivalent save operation
-    # 3. Adjust UserResponse model if these preferences should be returned after update.
-
     print(
         f"Mock update_user_preferences called for user_id: {user_id} with payload: {payload.model_dump_json(exclude_none=True)}"
     )
@@ -213,7 +204,7 @@ def update_user_profile(
                 raise ValueError(
                     f"Username '{payload.username}' is already taken."
                 )
-        update_fields.append("name = %(username)s")  # This updates author.name
+        update_fields.append("name = %(username)s")
         params["username"] = payload.username
 
     if payload.email is not None:
@@ -225,7 +216,7 @@ def update_user_profile(
             )
             if cur.fetchone() is not None:
                 raise ValueError(f"Email '{payload.email}' is already taken.")
-        update_fields.append("email = %(email)s")  # This updates user.email
+        update_fields.append("email = %(email)s")
         params["email"] = payload.email
 
     if not update_fields:
@@ -369,10 +360,8 @@ def _map_row_to_quote(
         try:
             embedding_value = json.loads(embedding_value)
         except json.JSONDecodeError:
-            # Handle cases where embedding is not a valid JSON string or is already None/empty
             embedding_value = None
     elif not isinstance(embedding_value, list):
-        # If it's not a string and not a list, set to None (or handle as error)
         embedding_value = None
 
     return model.Quote(
@@ -470,7 +459,17 @@ def get_quote_details_for_page_entry(
                 COALESCE(
                     (SELECT array_agg(t.name ORDER BY t.name) FROM tag t JOIN taggedas ta ON t.id = ta.tag_id WHERE ta.quote_id = q.id),
                     ARRAY[]::VARCHAR[]
-                ) as tags
+                ) as tags,
+                CASE
+                    WHEN CAST(%(user_id)s AS INTEGER) IS NOT NULL THEN (
+                        SELECT COALESCE(json_agg(json_build_object('id', coll.id, 'name', coll.name) ORDER BY coll.name), '[]'::json)
+                        FROM collection coll
+                        JOIN collectioncontains cc ON coll.id = cc.collection_id
+                        WHERE cc.quote_id = q.id
+                        AND coll.author_id = (SELECT author_id FROM "user" WHERE id = CAST(%(user_id)s AS INTEGER))
+                    )
+                    ELSE '[]'::json
+                END AS user_collections
             FROM quote q
             JOIN author a ON q.author_id = a.id
             LEFT JOIN (
@@ -486,6 +485,18 @@ def get_quote_details_for_page_entry(
         if row is None:
             return None
 
+        # Ensure user_collections is properly parsed (it should be a list of dicts or None)
+        user_collections_data = row[7]
+        if isinstance(
+            user_collections_data, str
+        ):  # Handle if DB returns JSON string
+            try:
+                user_collections_data = json.loads(user_collections_data)
+            except json.JSONDecodeError:
+                user_collections_data = []  # Default to empty list on error
+        elif user_collections_data is None:
+            user_collections_data = []
+
         return model.QuotePageEntry(
             id=row[0],
             text=row[1],
@@ -494,6 +505,7 @@ def get_quote_details_for_page_entry(
             favoriteCount=row[4],
             isFavorited=row[5],
             tags=row[6] if row[6] is not None else [],
+            userCollections=user_collections_data,
         )
 
 
@@ -622,7 +634,6 @@ def get_collection_by_id(
         quote_count_row = cur.fetchone()
         quote_count = quote_count_row[0] if quote_count_row else 0
 
-        # Fetch the actual quotes for the collection
         quotes_in_collection = get_quote_page_entries_for_collection(
             conn, collection_id, current_user_id
         )
@@ -637,7 +648,7 @@ def get_collection_by_id(
             created_at=row[6],
             updated_at=row[7],
             quote_count=quote_count,
-            quotes=quotes_in_collection,  # Populate the quotes field
+            quotes=quotes_in_collection,
         )
 
 
@@ -791,10 +802,6 @@ def get_all_unique_tags_with_counts(conn: Connection) -> List[model.TagEntry]:
 def search_tags_by_name(
     conn: Connection, search_term: str, limit: int = 20, skip: int = 0
 ) -> List[model.TagEntry]:
-    """
-    Searches for tags by name (case-insensitive, partial match) and returns them
-    with their quote counts.
-    """
     tag_entries = []
 
     if not search_term.strip():
@@ -803,7 +810,6 @@ def search_tags_by_name(
     search_query_param = f"%{search_term.lower()}%"
     params = [search_query_param, limit, skip]
 
-    # Corrected triple-quoted string
     sql_query = """
         SELECT
             t.name,
@@ -952,51 +958,63 @@ def get_quote_favorite_count(conn: Connection, quote_id: int) -> int:
 
 
 def search_collections(
-    conn: Connection, search_term: str, limit: int = 10, skip: int = 0
+    conn: Connection,
+    search_term: str,
+    limit: int = 10,
+    skip: int = 0,
+    current_user_id: Optional[int] = None,
 ) -> List[model.CollectionEntry]:
     collection_entries = []
     params = []
 
     base_query = """
         SELECT
-            c.id,
-            c.name,
-            c.description,
-            c.author_id,
-            a.name AS author_name,
-            c.is_public,
+            c.id, c.name, c.description, c.author_id,
+            a.name AS author_name, c.is_public,
             (SELECT COUNT(*) FROM collectioncontains cc WHERE cc.collection_id = c.id) AS quote_count
         FROM collection c
         JOIN author a ON c.author_id = a.id
     """
 
-    where_clauses = []
+    where_parts = []
+
+    search_condition_str = (
+        "(LOWER(c.name) ~* LOWER(%s) OR LOWER(c.description) ~* LOWER(%s))"
+    )
+
+    users_private_collection_condition_str = '(c.author_id = (SELECT author_id FROM "user" WHERE id = %s) AND c.is_public = FALSE)'
 
     if search_term.strip():
-        search_query_param = f"%{search_term.lower()}%"
-        where_clauses.append(
-            "(LOWER(c.name) LIKE %s OR LOWER(c.description) LIKE %s)"
-        )
-        params.extend([search_query_param, search_query_param])
-        # When searching, we still only want public collections unless a specific design implies otherwise.
-        # For now, matching existing behavior for non-empty search and adding public for empty.
-        # If search should include non-public, this logic would need adjustment or a new param.
-        where_clauses.append(
-            "c.is_public = TRUE"
-        )  # Assuming search also implies public
+        search_text_param = (
+            search_term.strip()
+        )  # Use the search term directly as regex pattern
+        if current_user_id is not None:
+            main_condition = f"(c.is_public = TRUE OR {users_private_collection_condition_str}) AND {search_condition_str}"
+            where_parts.append(main_condition)
+            params.extend(
+                [current_user_id, search_text_param, search_text_param]
+            )
+        else:
+            main_condition = f"(c.is_public = TRUE AND {search_condition_str})"
+            where_parts.append(main_condition)
+            params.extend([search_text_param, search_text_param])
     else:
-        # If search term is empty, fetch all public collections
-        where_clauses.append("c.is_public = TRUE")
+        if current_user_id is not None:
+            main_condition = f"(c.is_public = TRUE OR {users_private_collection_condition_str})"
+            where_parts.append(main_condition)
+            params.append(current_user_id)
+        else:
+            where_parts.append("c.is_public = TRUE")
 
-    if where_clauses:
-        base_query += " WHERE " + " AND ".join(where_clauses)
+    final_query = base_query
+    if where_parts:
+        final_query += " WHERE " + " AND ".join(where_parts)
 
-    base_query += " ORDER BY c.name LIMIT %s OFFSET %s"
+    final_query += " ORDER BY c.name LIMIT %s OFFSET %s"
     params.extend([limit, skip])
 
     with conn.cursor() as cur:
-        cur.execute(base_query, tuple(params))
-
+        cur.execute(final_query, tuple(params))
         for row in cur.fetchall():
             collection_entries.append(
                 model.CollectionEntry(
@@ -1101,10 +1119,14 @@ def update_collection(
 
         update_fields_dict["updated_at"] = "NOW()"
 
-        set_clause = ", ".join(
-            [f"{key} = %({key})s" for key in update_fields_dict]
-        )
-        # Parameters for execute must not include the key for NOW()
+        set_clause_parts = []
+        for key in update_fields_dict:
+            if key == "updated_at":
+                set_clause_parts.append(f"{key} = NOW()")
+            else:
+                set_clause_parts.append(f"{key} = %({key})s")
+        set_clause = ", ".join(set_clause_parts)
+
         final_params = {
             k: v for k, v in update_fields_dict.items() if k != "updated_at"
         }
@@ -1198,23 +1220,18 @@ def update_quote_with_client_payload(
 
         if not update_fields and payload.tags is None:
             pass
-        elif update_fields:  # This elif should check if 'text' or 'author_id' are in update_fields
+        elif update_fields:
             set_clause_parts = []
-            if (
-                "text" in update_fields
-            ):  # Explicitly check for text to include embedding
+            if "text" in update_fields:
                 set_clause_parts.append("text = %(text)s")
                 set_clause_parts.append("embedding = %(embedding)s")
             if "author_id" in update_fields:
                 set_clause_parts.append("author_id = %(author_id)s")
 
-            if (
-                set_clause_parts
-            ):  # Only update if there are actual field changes
+            if set_clause_parts:
                 set_clause_parts.append("updated_at = NOW()")
                 set_clause = ", ".join(set_clause_parts)
 
-                # Prepare params for execute, only including keys that are in set_clause_parts
                 execute_params = {
                     k: v
                     for k, v in update_fields.items()
@@ -1357,7 +1374,7 @@ def _map_row_to_quote_page_entry(
 ) -> model.QuotePageEntry:
     quote_id, author_id_val, text, is_public, _, created_at, updated_at = row[
         :7
-    ]  # Assuming embedding is at index 4 and not directly used here for QuotePageEntry
+    ]
 
     author = get_author_by_id(conn, author_id_val)
     author_name = author.name if author else "Unknown Author"
@@ -1365,8 +1382,6 @@ def _map_row_to_quote_page_entry(
     tags_for_quote = get_tags_for_quote(conn, quote_id)
     tag_names = [tag.name for tag in tags_for_quote]
 
-    # For isFavorited and favoriteCount, we'd typically need user context and more queries.
-    # For now, providing default/simplified values.
     is_favorited_status = False
     fav_count = 0
     if current_user_id:
@@ -1378,12 +1393,12 @@ def _map_row_to_quote_page_entry(
     return model.QuotePageEntry(
         id=quote_id,
         text=text,
-        author=author_name,  # Legacy field, consider removing if frontend doesn't use
+        author=author_name,
         authorId=author_id_val,
         authorName=author_name,
         tags=tag_names,
-        isFavorited=is_favorited_status,  # Placeholder
-        favoriteCount=fav_count,  # Placeholder
+        isFavorited=is_favorited_status,
+        favoriteCount=fav_count,
     )
 
 
@@ -1392,7 +1407,6 @@ def get_quote_page_entries_for_collection(
 ) -> List[model.QuotePageEntry]:
     quote_entries = []
     with conn.cursor() as cur:
-        # Fetch essential quote data, including author_id
         cur.execute(
             """
             SELECT q.id, q.author_id, q.text, q.is_public, q.embedding, q.created_at, q.updated_at
@@ -1408,3 +1422,96 @@ def get_quote_page_entries_for_collection(
                 _map_row_to_quote_page_entry(conn, row, current_user_id)
             )
     return quote_entries
+
+
+def user_add_quote_to_collection(
+    conn: Connection, user_id: int, quote_id: int, collection_id: int
+) -> model.CollectionQuoteLink:
+    user = get_user_by_id(conn, user_id)
+    if not user or not user.author_id:
+        raise ValueError("User not found or user author_id is missing.")
+
+    collection = get_collection_by_id(conn, collection_id)
+    if not collection:
+        raise ValueError(f"Collection with ID {collection_id} not found.")
+
+    if collection.author_id != user.author_id:
+        raise ValueError(
+            "User is not authorized to add quotes to this collection."
+        )
+
+    return add_quote_to_collection(conn, quote_id, collection_id)
+
+
+def user_remove_quote_from_collection(
+    conn: Connection, user_id: int, quote_id: int, collection_id: int
+) -> bool:
+    user = get_user_by_id(conn, user_id)
+    if not user or not user.author_id:
+        raise ValueError("User not found or user author_id is missing.")
+
+    collection = get_collection_by_id(conn, collection_id)
+    if not collection:
+        raise ValueError(f"Collection with ID {collection_id} not found.")
+
+    if collection.author_id != user.author_id:
+        raise ValueError(
+            "User is not authorized to remove quotes from this collection."
+        )
+
+    return remove_quote_from_collection(conn, quote_id, collection_id)
+
+
+def get_collections_from_author(
+    conn: Connection, author_id: int
+) -> list[model.Collection]:
+    collections = []
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT c.id, c.author_id, a.name as author_name, c.name, c.description, c.is_public "
+            "FROM collection c JOIN author a ON c.author_id = a.id "
+            "WHERE c.author_id = %s ORDER BY c.name",
+            (author_id,),
+        )
+        for row in cur.fetchall():
+            collection_id = row[0]
+            cur.execute(
+                "SELECT COUNT(*) FROM collectioncontains WHERE collection_id = %s",
+                (collection_id,),
+            )
+            quote_count_row = cur.fetchone()
+            quote_count = quote_count_row[0] if quote_count_row else 0
+
+            collections.append(
+                model.Collection(
+                    id=collection_id,
+                    author_id=row[1],
+                    author_name=row[2],
+                    name=row[3],
+                    description=row[4],
+                    is_public=row[5],
+                    quote_count=quote_count,
+                )
+            )
+    return collections
+
+
+def remove_quote_from_collection(
+    conn: Connection, quote_id: int, collection_id: int
+) -> bool:
+    with conn.cursor() as cur:
+        try:
+            cur.execute(
+                "DELETE FROM collectioncontains WHERE quote_id = %s AND collection_id = %s",
+                (quote_id, collection_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            print(
+                f"Error removing quote {quote_id} from collection {collection_id}: {e}"
+            )
+            raise ValueError(
+                f"Could not remove quote {quote_id} from collection {collection_id}: {e}"
+            ) from e

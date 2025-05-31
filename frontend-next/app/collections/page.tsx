@@ -8,30 +8,27 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Loader2, AlertTriangle, BookCopy, Search, ChevronRight } from "lucide-react";
 import { CollectionEntry, searchCollections } from '@/lib/api';
-import { useAuth } from "@/lib/auth"; // Import useAuth
+import { useAuth } from "@/lib/auth";
 
-// const MOCK_AUTH_TOKEN = "mock-jwt-token-for-dev"; // Removed
 
 export default function CollectionsPage() {
-  const { token: authToken, isLoading: authIsLoading } = useAuth(); // Use useAuth hook
+  const { token: authToken, isLoading: authIsLoading } = useAuth();
   const [collections, setCollections] = useState<CollectionEntry[]>([]);
-  // Combined loading state: true if either auth is resolving or data is fetching
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false); // Keep for search-specific loading state
+  const [isSearching, setIsSearching] = useState(false);
 
   const fetchPublicCollections = useCallback(async (query: string = "") => {
     if (query.trim() !== "") {
-        setIsSearching(true); // Indicate search is in progress
-        setIsLoading(false); // Main loading might be false if it was a subsequent search
+        setIsSearching(true);
+        setIsLoading(false);
     } else {
-        setIsLoading(true); // Initial load or clearing search
+        setIsLoading(true);
         setIsSearching(false);
     }
     setError(null);
     try {
-      // Pass authToken (can be null, searchCollections handles it)
       const fetchedCollections = await searchCollections(query, 20, 0, authToken);
       setCollections(fetchedCollections || []);
     } catch (err) {
@@ -39,25 +36,24 @@ export default function CollectionsPage() {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to load collections.");
       setCollections([]);
     } finally {
-      setIsLoading(false); // General loading stops
-      setIsSearching(false); // Search-specific loading stops
+      setIsLoading(false);
+      setIsSearching(false);
     }
   }, [authToken]);
 
   useEffect(() => {
-    if (!authIsLoading) { // Only fetch once auth state is resolved
+    if (!authIsLoading) {
         fetchPublicCollections();
     }
-  }, [authIsLoading, fetchPublicCollections]); // Re-fetch if authIsLoading changes (e.g., on initial load)
+  }, [authIsLoading, fetchPublicCollections]);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // No need to check authIsLoading here for search, fetchPublicCollections handles its own loading states
     fetchPublicCollections(searchTerm);
   };
 
   const renderCollections = () => {
-    if (isLoading && !isSearching) { // Show main loader only on initial load, not during active search spinner
+    if (isLoading && !isSearching) {
       return (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
@@ -99,7 +95,7 @@ export default function CollectionsPage() {
                 )}
               </CardHeader>
               <CardContent className="flex-grow">
-                <p className="text-sm text-muted-foreground line-clamp-3 mb-1">
+                <p className="text-sm text-muted-foreground line-clamp-2 h-[40px] overflow-hidden mb-3">
                   {collection.description || "No description available."}
                 </p>
                  <p className="text-xs text-muted-foreground">{collection.quoteCount || 0} quotes</p>

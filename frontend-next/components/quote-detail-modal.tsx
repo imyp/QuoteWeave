@@ -13,10 +13,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { type QuotePageEntry, favoriteQuote, unfavoriteQuote } from "@/lib/api"; // Use type and functions from api.ts
-import { useAuth } from "@/lib/auth"; // Added useAuth
-import { toast } from "sonner"; // Import toast
+import { type QuotePageEntry, favoriteQuote, unfavoriteQuote } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 import { QuoteIcon, UserCircle, TagsIcon, Edit2Icon, ExternalLink, XIcon, Heart, Loader2 } from "lucide-react";
+
+// Local interface extending the API type to include client-side animation state
+interface QuoteModalState extends QuotePageEntry {
+  _animateHeart?: boolean;
+}
 
 interface QuoteDetailModalProps {
   quote: QuotePageEntry;
@@ -25,41 +30,34 @@ interface QuoteDetailModalProps {
 
 export default function QuoteDetailModal({ quote: initialQuote, onQuoteUpdate }: QuoteDetailModalProps) {
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth(); // Use isAuthenticated
-  const [quote, setQuote] = useState<QuotePageEntry>(initialQuote);
+  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
+  const [quote, setQuote] = useState<QuoteModalState>(initialQuote);
   const [isFavoriting, setIsFavoriting] = useState(false);
   const [animateHeart, setAnimateHeart] = useState(false);
 
   useEffect(() => {
-    // Update local quote state if the initialQuote prop changes (e.g. due to parent re-render)
-    // Also, incorporate the isFavorited status from the initial prop if the user context is available
-    // This handles cases where the modal opens for a quote already favorited by the current user.
     setQuote(prevQuote => {
-      const baseState = { ...initialQuote };
-      const updatedQuote = !isAuthenticated && baseState.isFavorited === true
-        ? { ...baseState, isFavorited: false }
-        : baseState;
-      // Retain local animation state if quote ID is the same
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return prevQuote.id === updatedQuote.id ? { ...updatedQuote, ...{_animateHeart: (prevQuote as any)._animateHeart} } : updatedQuote;
+      if (prevQuote.id === initialQuote.id) {
+        return { ...initialQuote, _animateHeart: prevQuote._animateHeart };
+      }
+      return initialQuote;
     });
-  }, [initialQuote, isAuthenticated]);
+  }, [initialQuote]);
 
 
   if (!quote) return null;
 
   const handleFavoriteToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (authIsLoading) return; // Don't do anything if auth state is still loading
+    if (authIsLoading) return;
 
     if (!isAuthenticated || !token) {
       console.warn("User not authenticated. Cannot favorite.");
-      // router.push("/login"); // Example: Redirect to login
       return;
     }
 
     setIsFavoriting(true);
-    setAnimateHeart(true); // Start animation
+    setAnimateHeart(true);
 
     // Optimistic update
     const originalQuote = { ...quote };
@@ -86,26 +84,19 @@ export default function QuoteDetailModal({ quote: initialQuote, onQuoteUpdate }:
         await unfavoriteQuote(quote.id, token);
         toast.success("Quote unfavorited!");
       }
-      // If API call is successful, the optimistic update is confirmed.
-      // Optionally, re-fetch the quote or rely on the parent to pass updated props.
-      // For now, the optimistic update stands.
     } catch (error) {
       console.error("Failed to update favorite status:", error);
-      // Error toast is already shown by fetchApi, but we can add a more specific one if desired
-      // toast.error("Failed to update favorite status", { description: error instanceof Error ? error.message : String(error) });
       setQuote(originalQuote);
       if (onQuoteUpdate) {
         onQuoteUpdate(originalQuote);
       }
     } finally {
       setIsFavoriting(false);
-      // Reset animation after a short delay
       setTimeout(() => setAnimateHeart(false), 400);
     }
   };
 
   const authorDisplayName = quote.authorName || 'Unknown Author';
-  // The link now needs a numeric ID. Ensure quote.authorId is available and is a number from the API if this link is used.
   const authorLink = quote.authorId ? `/authors/${quote.authorId}` : '#';
 
   return (
@@ -152,7 +143,7 @@ export default function QuoteDetailModal({ quote: initialQuote, onQuoteUpdate }:
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             {quote.tags.map(tag => (
-              <Link href={`/tags/${tag.toLowerCase().replace(/\s+/g, '-')}`} key={tag} passHref>
+              <Link href={`/quotes/tags/${encodeURIComponent(tag.toLowerCase().replace(/\s+/g, '-'))}`} key={tag} passHref>
                 <Badge variant="secondary" className="text-xs px-2.5 py-0.5 hover:bg-primary/20 transition-colors cursor-pointer">
                   {tag}
                 </Badge>

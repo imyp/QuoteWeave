@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Annotated, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from psycopg import Connection
@@ -38,22 +38,12 @@ async def get_current_user(conn: ConnectionDep, token: TokenDep) -> model.User:
     try:
         payload = security.jwt_decode(token)
         username: str | None = payload.get("sub")
-        print(
-            f"[get_current_user] Extracted username from token: {username}"
-        )  # DEBUG
         if username is None:
-            print(
-                "[get_current_user] Username is None in token payload."
-            )  # DEBUG
             raise credentials_exception
     except InvalidTokenError as e:
-        print(f"[get_current_user] InvalidTokenError: {e}")  # DEBUG
         raise credentials_exception
     user = crud.get_user_by_name(conn, username)
     if user is None:
-        print(
-            f"[get_current_user] User not found by username: {username}"
-        )  # DEBUG
         raise credentials_exception
     return user
 
@@ -62,36 +52,54 @@ CurrentUserDep = Annotated[model.User, Depends(get_current_user)]
 
 
 async def get_optional_current_user(
-    conn: ConnectionDep, token: Optional[TokenDep] = None
+    request: Request,
+    conn: ConnectionDep,
+    token_from_dep: Optional[TokenDep] = None,
 ) -> Optional[model.User]:
+    actual_token: Optional[str] = token_from_dep
     print(
-        f"[get_optional_current_user] Received token: {'present' if token else token}"
-    )  # DEBUG
-    if token is None:
+        f"[get_optional_current_user] Token from dependency: {'present' if actual_token else actual_token}"
+    )
+
+    if not actual_token:
+        auth_header = request.headers.get("authorization")
         print(
-            "[get_optional_current_user] Token is None, returning None."
-        )  # DEBUG
+            f"[get_optional_current_user] Manually read 'authorization' header: {auth_header}"
+        )
+        if auth_header:
+            parts = auth_header.split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                actual_token = parts[1]
+                print(
+                    f"[get_optional_current_user] Manually extracted token: {'present' if actual_token else 'error in extraction'}"
+                )
+            else:
+                print(
+                    f"[get_optional_current_user] 'authorization' header malformed: {auth_header}"
+                )
+
+    if actual_token is None:
+        print(
+            "[get_optional_current_user] No token found (either from dep or manual), returning None."
+        )
         return None
     try:
         print(
-            "[get_optional_current_user] Attempting to call get_current_user."
-        )  # DEBUG
-        user = await get_current_user(conn, token)
+            "[get_optional_current_user] Attempting to call get_current_user with actual_token."
+        )
+        user = await get_current_user(conn, actual_token)
         print(
             f"[get_optional_current_user] get_current_user returned: {'user object' if user else 'None'}"
-        )  # DEBUG
+        )
         return user
     except HTTPException as e:
         print(
             f"[get_optional_current_user] HTTPException caught: status={e.status_code}, detail={e.detail}"
-        )  # DEBUG
-        # If token is invalid or user not found, treat as anonymous for this optional case
+        )
         if e.status_code == status.HTTP_401_UNAUTHORIZED:
-            print(
-                "[get_optional_current_user] Caught 401, returning None."
-            )  # DEBUG
+            print("[get_optional_current_user] Caught 401, returning None.")
             return None
-        raise  # Re-raise other exceptions
+        raise
 
 
 OptionalCurrentUserDep = Annotated[
@@ -121,7 +129,6 @@ CurrentUserResponseDep = Annotated[
 # Define the lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic
     print("Application startup via lifespan...")
     try:
         embedding.load_embedding_model()
@@ -145,7 +152,6 @@ async def lifespan(app: FastAPI):
 
     print("Startup via lifespan finished.")
     yield
-    # Shutdown logic (if any) would go here
     print("Application shutdown via lifespan...")
 
 
@@ -161,7 +167,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost",
-        "http://localhost:5173",
         "http://localhost:3000",
     ],
     allow_credentials=True,
@@ -235,13 +240,10 @@ async def update_current_user_profile_endpoint(
         updated_user = crud.update_user_profile(conn, current_user.id, payload)
         return updated_user
     except ValueError as e:
-        # Handle specific errors like username/email taken, or general update failure
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
     except Exception as e:
-        # Log generic server errors
-        # logger.error(f"Error updating profile for user {current_user.id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while updating profile.",
@@ -263,17 +265,12 @@ async def list_authors_endpoint(
         20, gt=0, le=100, description="Number of authors to return"
     ),
 ):
-    """
-    Retrieves a paginated list of authors, optionally filtered by a search term.
-    """
     try:
         authors_response = crud.get_authors_paginated(
             conn, search_term=search, limit=limit, skip=skip
         )
         return authors_response
     except Exception as e:
-        # Log the exception details for debugging
-        # logger.error(f"Error fetching authors: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching authors.",
@@ -284,12 +281,11 @@ async def list_authors_endpoint(
 async def change_current_user_password(
     conn: ConnectionDep,
     payload: model.ChangePasswordPayload,
-    current_user: CurrentUserDep,  # Ensures user is authenticated
+    current_user: CurrentUserDep,
 ):
     try:
         success = crud.update_user_password(conn, current_user.id, payload)
         if not success:
-            # This case might occur if rowcount is 0 for some unexpected reason
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Password could not be updated.",
@@ -305,17 +301,14 @@ async def change_current_user_password(
 async def update_current_user_preferences(
     conn: ConnectionDep,
     payload: model.UpdateUserProfilePayload,
-    current_user: CurrentUserDep,  # Ensures user is authenticated
+    current_user: CurrentUserDep,
 ):
     try:
-        # The CRUD function currently mocks DB update and returns existing user info.
-        # When DB schema is updated, this will reflect actual changes.
         updated_user_response = crud.update_user_preferences(
             conn, current_user.id, payload
         )
         return updated_user_response
     except ValueError as e:
-        # e.g., if user not found in crud despite being authenticated (should not happen)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
         )
@@ -330,8 +323,6 @@ async def get_quotes_page(
         None, description="Filter quotes by author ID"
     ),
 ):
-    # This should be consistent with the default value in getQuotePage in quote-utils.ts
-    # and also the value in PaginatedQuotesResponse in the frontend component.
     page_size = 9
     quotes = crud.get_quotes_for_page(
         conn,
@@ -353,7 +344,6 @@ async def get_quotes_total_pages(
         None, description="Filter quotes by author ID"
     ),
 ):
-    # This needs to be consistent with page_size used in get_quotes_page
     page_size = 9
     total_pages = crud.get_quotes_total_pages(
         conn, page_size, author_id=author_id
@@ -393,7 +383,6 @@ async def get_quotes_by_tag_name_endpoint(
 
     quotes_for_tag = crud.get_quotes_by_tag(conn, tag.id)
     if not quotes_for_tag:
-        # Return empty QuotePageResponse if tag exists but has no quotes
         return model.QuotePageResponse(
             quotes=[], totalPages=0, currentPage=page, totalItems=0
         )
@@ -401,7 +390,6 @@ async def get_quotes_by_tag_name_endpoint(
     user_id = current_user.id if current_user else None
     quote_page_entries = []
 
-    # Manual pagination
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
     paginated_db_quotes = quotes_for_tag[start_index:end_index]
@@ -466,24 +454,19 @@ async def create_quote(
     conn: ConnectionDep,
     current_user: CurrentUserDep,
 ):
-    if current_user.id is None:  # Should not happen if CurrentUserDep works
+    if current_user.id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User not authenticated.",
         )
     try:
-        # Note: create_quote_with_client_payload expects user_id for now, not author_id
-        # This might need adjustment based on how user's ability to create quotes is tied to authors
-        # For now, passing current_user.id. The CRUD can internally decide if this user can act as an author or create one.
         new_quote_page_entry = crud.create_quote_with_client_payload(
             conn, payload=payload, user_id=current_user.id
         )
         return new_quote_page_entry
     except ValueError as e:
-        # Specific error for duplicate or invalid data can be handled here
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Log e
         raise HTTPException(status_code=500, detail="Failed to create quote.")
 
 
@@ -518,7 +501,6 @@ async def update_quote_endpoint(
             )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Log e
         raise HTTPException(status_code=500, detail="Failed to update quote.")
 
 
@@ -536,9 +518,6 @@ async def delete_quote_endpoint(
             conn, quote_id=quote_id, user_author_id=current_user.author_id
         )
         if not success:
-            # This could mean quote not found, or already deleted.
-            # The CRUD function returns False for "not found".
-            # For "not authorized", it raises ValueError, caught below.
             raise HTTPException(
                 status_code=404,
                 detail="Quote not found or could not be deleted.",
@@ -548,12 +527,10 @@ async def delete_quote_endpoint(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
             )
-        # Other ValueErrors from CRUD might indicate issues like "quote not found" if not handled by return value
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Log e
         raise HTTPException(status_code=500, detail="Failed to delete quote.")
-    return  # For 204 No Content
+    return
 
 
 @app.get("/authors/{author_id}")
@@ -604,12 +581,10 @@ async def generate_tags_endpoint(request: TaggingRequest):
 
 @app.get("/tags/all", response_model=List[model.TagEntry], tags=["Tags"])
 async def get_all_tags_with_counts_endpoint(conn: ConnectionDep):
-    """Retrieve all unique tags with their corresponding quote counts."""
     try:
         tags_with_counts = crud.get_all_unique_tags_with_counts(conn)
         return tags_with_counts
     except Exception as e:
-        # Log the exception e for debugging purposes
         print(f"Error fetching all tags with counts: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -649,7 +624,6 @@ async def search_quotes_endpoint(
         )
         return quotes
     except Exception as e:
-        # Log the exception e
         raise HTTPException(
             status_code=500, detail=f"Error during semantic search: {str(e)}"
         )
@@ -662,10 +636,6 @@ async def search_quotes_endpoint(
     tags=["Mock Data"],
 )
 async def get_all_mock_quotes():
-    """Returns all quotes loaded from the CSV mock data file."""
-    if not embedding.CSV_QUOTES_DATA:
-        # This allows the app to be functional even if mock data isn't loaded
-        return []
     return embedding.CSV_QUOTES_DATA
 
 
@@ -683,10 +653,7 @@ async def search_mock_quotes_semantic(
         10, gt=0, le=50, description="Number of similar quotes to return"
     ),
 ):
-    """Performs semantic search for quotes based on the query using embeddings from mock data."""
     if not embedding.CSV_QUOTES_DATA or embedding.CSV_QUOTE_EMBEDDINGS is None:
-        # Functional without mock data
-        # Or raise HTTPException(status_code=404, detail="Mock quote data not available for search.")
         return []
 
     results = embedding.search_similar_quotes(query_text=query, top_n=top_n)
@@ -700,7 +667,6 @@ async def search_mock_quotes_semantic(
 async def favorite_a_quote(
     quote_id: int, conn: ConnectionDep, current_user: CurrentUserDep
 ):
-    # Check if quote exists
     quote = crud.get_quote_by_id(conn, quote_id)
     if not quote:
         raise HTTPException(
@@ -710,7 +676,6 @@ async def favorite_a_quote(
     try:
         crud.add_favorite(conn, current_user.id, quote_id)
     except ValueError as e:
-        # This might happen if there's a DB issue, already logged in crud
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -723,7 +688,6 @@ async def favorite_a_quote(
 async def unfavorite_a_quote(
     quote_id: int, conn: ConnectionDep, current_user: CurrentUserDep
 ):
-    # Check if quote exists (optional, as remove_favorite handles non-existence gracefully, but good for consistent 404)
     quote = crud.get_quote_by_id(conn, quote_id)
     if not quote:
         raise HTTPException(
@@ -759,12 +723,11 @@ async def create_new_collection(
             detail="User is not associated with an author and cannot create collections.",
         )
 
-    # Construct the full CreateCollectionQuery for the CRUD function
     full_collection_data = model.CreateCollectionQuery(
         name=collection_data.name,
         description=collection_data.description,
         is_public=collection_data.is_public,
-        author_id=current_user.author_id,  # Use author_id from authenticated user
+        author_id=current_user.author_id,
     )
 
     try:
@@ -783,7 +746,6 @@ async def create_new_collection(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
     except Exception as e:
-        # Log e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while creating the collection.",
@@ -795,7 +757,6 @@ async def get_my_collections(
     conn: ConnectionDep, current_user: CurrentUserDep
 ):
     if current_user.author_id is None:
-        # Or return empty list if user is not an author / has no collections
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not associated with an author.",
@@ -811,11 +772,13 @@ async def get_single_collection(
     collection_id: int,
     conn: ConnectionDep,
     current_user: OptionalCurrentUserDep,
+    request: Request,
 ):
+    print(f"[get_single_collection] Request headers: {request.headers}")
     user_id = current_user.id if current_user else None
     print(
         f"Attempting to fetch collection {collection_id} for user_id: {user_id}"
-    )  # DEBUG
+    )
     collection = crud.get_collection_by_id(
         conn, collection_id, current_user_id=user_id
     )
@@ -825,23 +788,22 @@ async def get_single_collection(
             detail="Collection not found",
         )
 
-    # If collection is not public, only the author can see it
     if not collection.is_public:
-        print(f"Collection {collection_id} is private.")  # DEBUG
-        if current_user:  # DEBUG
+        print(f"Collection {collection_id} is private.")
+        if current_user:
             print(
                 f"Current user ID: {current_user.id}, Current user author_id: {current_user.author_id}"
-            )  # DEBUG
-        else:  # DEBUG
-            print("Current user is None.")  # DEBUG
-        print(f"Collection author_id: {collection.author_id}")  # DEBUG
+            )
+        else:
+            print("Current user is None.")
+        print(f"Collection author_id: {collection.author_id}")
         if (
             current_user is None
             or current_user.author_id != collection.author_id
         ):
             print(
                 f"Authorization failed for user {current_user.id if current_user else 'None'} and collection {collection_id}."
-            )  # DEBUG
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this collection",
@@ -884,7 +846,6 @@ async def update_existing_collection(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
     except Exception as e:
-        # Log e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while updating the collection.",
@@ -907,10 +868,6 @@ async def delete_existing_collection(
             conn, collection_id, current_user.author_id
         )
         if not success:
-            # This could mean not found or (less likely if ValueError not raised) not authorized from CRUD perspective
-            # For DELETE, if not found, it's often idempotent, so 204 is still okay.
-            # However, our CRUD raises ValueError for auth issues, which we catch.
-            # If it returns False, it means "not found".
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Collection not found.",
@@ -920,15 +877,91 @@ async def delete_existing_collection(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
             )
-        # Other ValueErrors could be more generic bad requests
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
     except Exception as e:
-        # Log e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while deleting the collection.",
+        )
+
+
+@app.post(
+    "/collections/{collection_id}/quotes/{quote_id}",
+    response_model=model.CollectionQuoteLink,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Collections"],
+)
+async def add_quote_to_collection_api(
+    collection_id: int,
+    quote_id: int,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    """Adds a quote to a specific collection owned by the current user."""
+    try:
+        link = crud.user_add_quote_to_collection(
+            conn, current_user.id, quote_id, collection_id
+        )
+        return link
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        elif "not found" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
+
+
+@app.delete(
+    "/collections/{collection_id}/quotes/{quote_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Collections"],
+)
+async def remove_quote_from_collection_api(
+    collection_id: int,
+    quote_id: int,
+    conn: ConnectionDep,
+    current_user: CurrentUserDep,
+):
+    """Removes a quote from a specific collection owned by the current user."""
+    try:
+        success = crud.user_remove_quote_from_collection(
+            conn, current_user.id, quote_id, collection_id
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quote not found in collection or collection not found.",
+            )
+        return
+    except ValueError as e:
+        if "not authorized" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+            )
+        elif "not found" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
         )
 
 
@@ -943,6 +976,7 @@ async def delete_existing_collection(
 )
 async def search_collections_endpoint(
     conn: ConnectionDep,
+    current_user: OptionalCurrentUserDep,
     query: str = Query(
         "",
         description="Text to search for in collection names and descriptions. Empty string for all public.",
@@ -955,12 +989,16 @@ async def search_collections_endpoint(
     ),
 ):
     try:
+        user_id_param = current_user.id if current_user else None
         collections = crud.search_collections(
-            conn, search_term=query, limit=limit, skip=skip
+            conn,
+            search_term=query,
+            limit=limit,
+            skip=skip,
+            current_user_id=user_id_param,
         )
         return collections
     except Exception as e:
-        # Log the exception e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error during collection search: {str(e)}",
@@ -976,7 +1014,7 @@ async def search_tags_endpoint(
     conn: ConnectionDep,
     query: str = Query(
         ...,
-        min_length=1,  # Require at least 1 char for search
+        min_length=1,
         description="Text to search for in tag names.",
     ),
     limit: int = Query(
@@ -986,21 +1024,14 @@ async def search_tags_endpoint(
         0, ge=0, description="Number of results to skip for pagination"
     ),
 ):
-    """
-    Performs a case-insensitive search for tags by name and returns them
-    with their associated quote counts.
-    """
-    if (
-        not query.strip()
-    ):  # Should be caught by min_length, but good to be safe
-        return []  # Or raise HTTPException for empty query if preferred
+    if not query.strip():
+        return []
     try:
         tags_with_counts = crud.search_tags_by_name(
             conn, search_term=query, limit=limit, skip=skip
         )
         return tags_with_counts
     except Exception as e:
-        # Log the exception e for debugging purposes
         print(f"Error searching tags: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

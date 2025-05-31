@@ -1,5 +1,3 @@
-"""Database actions."""
-
 import os
 from dataclasses import dataclass
 
@@ -15,23 +13,13 @@ class DatabaseSettings:
     password: str
 
 
-# Read settings from environment variables, falling back to defaults
-# The defaults should ideally match your docker-compose for local development ease
-# or be clearly documented if they differ.
 settings = DatabaseSettings(
     host=os.environ.get("POSTGRES_SERVER", "db"),
     port=int(os.environ.get("POSTGRES_PORT", "5432")),
-    dbname=os.environ.get(
-        "POSTGRES_DB", "quoteweave_demo"
-    ),  # Defaulting to compose.yaml value
+    dbname=os.environ.get("POSTGRES_DB", "quoteweave_demo"),
     user=os.environ.get("POSTGRES_USER", "postgres"),
-    password=os.environ.get(
-        "POSTGRES_PASSWORD", "postgres"
-    ),  # Defaulting to compose.yaml value
+    password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
 )
-
-# Debugging
-# print(f"DEBUG: Database settings: {settings}")
 
 
 def get_connection():

@@ -8,22 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getMyCollections, CollectionEntry, getCurrentUserProfile } from "@/lib/api";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { useAuth } from "@/lib/auth"; // Import useAuth
-
-// Mock user data
-// const mockUser = {
-//   username: "QuoteFan123",
-// };
-
-// Mock data for user's collections
-// const mockUserCollections = [
-//   { id: "c1", name: "Stoic Wisdom", description: "A collection of quotes on stoicism and resilience.", quoteCount: 15, isPublic: true, tags: ["stoicism", "philosophy", "resilience", "virtue"] },
-//   { id: "c2", name: "Entrepreneurial Insights for Modern Times", description: "Wisdom for the startup journey, focusing on innovation and market adaptation.", quoteCount: 28, isPublic: false, tags: ["business", "startups", "motivation", "innovation", "strategy"] },
-//   { id: "c3", name: "Poetic Musings on Nature and Life", description: "Verses that touch the soul, exploring the beauty of the natural world and human existence.", quoteCount: 8, isPublic: true, tags: ["poetry", "art", "nature", "life", "beauty"] },
-// ];
+import { useAuth } from "@/lib/auth";
 
 export default function UserCollectionsPage() {
-  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth(); // Get auth token and user
+  const { token: authToken, isAuthenticated, isLoading: authIsLoading } = useAuth();
   const [collections, setCollections] = useState<CollectionEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +144,6 @@ export default function UserCollectionsPage() {
                                 <BookOpen className="h-3.5 w-3.5 mr-1.5" />
                                 <span>{collection.quoteCount} Quotes</span>
                             </div>
-                            {/* Tags for collections not implemented in backend yet */}
                         </div>
                       </CardContent>
                     </Card>

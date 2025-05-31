@@ -10,8 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { PlusCircle, Terminal, Loader2, Sparkles, LogIn } from "lucide-react"
 import { useAuth } from "@/lib/auth";
-
-// Import the actual API call function and payload type
 import { createQuote, CreateQuoteClientPayload, generateTagsForQuote, GenerateTagsPayload } from '@/lib/api';
 
 export default function NewQuotePage() {
@@ -59,7 +57,7 @@ export default function NewQuotePage() {
         const newTagsString = combinedTags.slice(0, 7).join(', ');
         setTags(newTagsString);
       } else {
-        // Optional: setError("AI couldn't suggest any tags for this quote.");
+        setError("AI couldn't suggest any tags for this quote.");
       }
     } catch (err) {
       console.error("Failed to generate tags:", err);
@@ -71,6 +69,19 @@ export default function NewQuotePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!text.trim()) {
+      setError("Quote text cannot be empty.");
+      setIsSubmitting(false);
+      document.getElementById('quoteText')?.focus();
+      return;
+    }
+    if (!authorName.trim()) {
+      setError("Author's name cannot be empty.");
+      setIsSubmitting(false);
+      document.getElementById('authorName')?.focus();
+      return;
+    }
 
     if (!isAuthenticated || !authToken) {
         setError("You must be logged in to create a quote. Authentication token is missing.");

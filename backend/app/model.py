@@ -1,11 +1,10 @@
 import ast
 import re
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-# Define password constraints for reusability
 PASSWORD_DESCRIPTION = "Password must be at least 8 characters long, include an uppercase letter, a lowercase letter, a digit, and a special character (@$!%*?&)."
 ALLOWED_PASSWORD_SPECIAL_CHARS = "@$!%*?&"
 ALLOWED_PASSWORD_CHARS_REGEX = r"^[A-Za-z0-9@$!%*?&]+$"
@@ -22,7 +21,7 @@ def _validate_password_strength(v: str) -> str:
         raise ValueError(
             "Password must include at least one uppercase letter."
         )
-    if not re.search(r"[0-9]", v):  # Changed from r"\\d"
+    if not re.search(r"[0-9]", v):
         raise ValueError("Password must include at least one digit.")
     if not re.search(f"[{re.escape(ALLOWED_PASSWORD_SPECIAL_CHARS)}]", v):
         raise ValueError(
@@ -153,14 +152,16 @@ class CreateCollectionQuery(BaseModel):
 class Collection(BaseModel):
     id: int
     author_id: int
-    author_name: Optional[str] = None
+    author_name: Optional[str] = Field(default=None, alias="authorName")
     name: str
     description: Optional[str] = None
-    is_public: bool
-    quote_count: Optional[int] = 0
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    is_public: bool = Field(alias="isPublic")
+    quote_count: Optional[int] = Field(default=0, alias="quoteCount")
+    created_at: Optional[datetime] = Field(default=None, alias="createdAt")
+    updated_at: Optional[datetime] = Field(default=None, alias="updatedAt")
     quotes: List["QuotePageEntry"] = []
+
+    model_config = {"populate_by_name": True, "from_attributes": True}
 
 
 class CollectionSimple(BaseModel):
@@ -182,16 +183,16 @@ class TagQuoteLink(BaseModel):
 class QuotePageEntry(BaseModel):
     id: int
     text: str
-    author: Optional[str] = None
-    authorId: Optional[int] = None
-    authorName: Optional[str] = None
-    tags: List[str]
-    isFavorited: Optional[bool] = None
-    favoriteCount: int = 0
+    authorId: int | None = None
+    authorName: str | None = None
+    tags: list[str] = []
+    isFavorited: bool | None = False
+    favoriteCount: int | None = 0
+    userCollections: list[dict[str, Any]] | None = Field(default_factory=list)
 
 
 class QuotePageResponse(BaseModel):
-    quotes: List[QuotePageEntry]
+    quotes: list[QuotePageEntry]
     totalPages: int
     currentPage: Optional[int] = None
     totalItems: Optional[int] = None
@@ -212,8 +213,6 @@ class AuthorResponse(BaseModel):
 class AuthorEntry(BaseModel):
     id: int
     name: str
-    # bio: Optional[str] = None  # Add if available from DB
-    # avatar_url: Optional[str] = None # Add if available from DB
 
 
 # New model for paginated list of authors
@@ -292,7 +291,7 @@ class CSVMockQuote(BaseModel):
 class CreateCollectionClientPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field("", max_length=500)
-    is_public: bool = False
+    is_public: Optional[bool] = None
 
 
 class UpdateCollectionQuery(BaseModel):
@@ -304,23 +303,24 @@ class UpdateCollectionQuery(BaseModel):
 # Payloads for client-side quote creation and updates
 class CreateQuoteClientPayload(BaseModel):
     text: str = Field(..., min_length=1)
-    authorName: str = Field(..., min_length=1)
+    authorName: str = Field(..., alias="author_name", min_length=1)
     tags: List[str] = Field(default_factory=list)
 
+    model_config = {
+        "populate_by_name": True,
+    }
+
     @field_validator("tags")
-    def validate_tags(cls, v):
+    def validate_tags(cls, v: List[str]) -> List[str]:
         if len(v) > 7:
             raise ValueError("A maximum of 7 tags are allowed.")
-        # Further tag validation (e.g., length, characters) can be added here
         return v
 
 
 class UpdateQuoteClientPayload(BaseModel):
     text: Optional[str] = Field(None, min_length=1)
     authorName: Optional[str] = Field(None, min_length=1)
-    tags: Optional[List[str]] = (
-        None  # Allow setting tags to empty list or new list
-    )
+    tags: Optional[List[str]] = None
 
     @field_validator("tags")
     def validate_tags_optional(cls, v):

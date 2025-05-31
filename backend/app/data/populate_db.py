@@ -1,7 +1,6 @@
 import csv
-import hashlib  # For generating deterministic user IDs or passwords if needed
-import json
-import logging  # Ensure logger is imported
+import hashlib
+import logging
 import os
 import random
 import sys
@@ -10,9 +9,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-
-# from sentence_transformers import SentenceTransformer # Previous library
-from fastembed import TextEmbedding  # Using FastEmbed
+from fastembed import TextEmbedding
 
 # Global variables for managing the embedding model instance
 embedding_model_instance: Optional[TextEmbedding] = None
@@ -23,67 +20,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-
-# --- Database Schema (Extended) ---
-# users (
-#   id SERIAL PRIMARY KEY,
-#   author_id INTEGER UNIQUE REFERENCES authors(id), -- A user is an author
-#   email TEXT UNIQUE NOT NULL,
-#   password_hash TEXT NOT NULL, -- Store hashed passwords
-#   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-# );
-#
-# authors (
-#   id SERIAL PRIMARY KEY,
-#   name TEXT UNIQUE NOT NULL
-# );
-#
-# tags (
-#   id SERIAL PRIMARY KEY,
-#   name TEXT UNIQUE NOT NULL
-# );
-#
-# quotes (
-#   id SERIAL PRIMARY KEY,
-#   text TEXT NOT NULL,
-#   author_id INTEGER REFERENCES authors(id),
-#   embedding VECTOR(384), -- Dimension from all-MiniLM-L6-v2
-#   is_public BOOLEAN DEFAULT TRUE,
-#   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-#   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-# );
-#
-# quote_tags (
-#   quote_id INTEGER REFERENCES quotes(id) ON DELETE CASCADE,
-#   tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-#   PRIMARY KEY (quote_id, tag_id)
-# );
-#
-# collections (
-#   id SERIAL PRIMARY KEY,
-#   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-#   name TEXT NOT NULL,
-#   description TEXT,
-#   is_public BOOLEAN DEFAULT TRUE,
-#   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-#   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-# );
-#
-# collectioncontains (
-#   collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE,
-#   quote_id INTEGER REFERENCES quotes(id) ON DELETE CASCADE,
-#   added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-#   PRIMARY KEY (collection_id, quote_id)
-# );
-#
-# user_quote_favorite (
-#   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-#   quote_id INTEGER REFERENCES quotes(id) ON DELETE CASCADE,
-#   favorited_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-#   PRIMARY KEY (user_id, quote_id)
-# );
-# --- End Schema ---
 
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 # EMBEDDING_MODEL_DIM = 384 # For BAAI/bge-small-en-v1.5
@@ -395,7 +331,7 @@ def generate_sql_from_csv(
                         ],  # Changed from user_id to author_id
                         "name": collection_name,
                         "description": f"A mock collection by {user_data['username_for_mock_collections']}.",
-                        "is_public": random.choice([True, False]),
+                        "is_public": True,  # Ensure all mock collections are public by default
                         "created_at": datetime.now(UTC).isoformat(),
                         "updated_at": datetime.now(UTC).isoformat(),
                     }
@@ -593,6 +529,3 @@ if __name__ == "__main__":
     logger.info(
         f"Generated comprehensive SQL population script: {sql_file_to_use}"
     )
-
-# Required for os.path operations in __main__
-# import os # Removed from here as it's now at the top

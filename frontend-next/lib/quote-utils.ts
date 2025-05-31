@@ -1,6 +1,5 @@
 "use client";
 
-// Placeholder for API functions and types
 export interface QuotePageEntry {
   id: number;
   authorId?: number;
@@ -16,7 +15,6 @@ export interface PaginatedQuotesResponse {
   totalPages: number;
 }
 
-// Mock API Response type (consistent with collection-utils)
 interface ApiResponse<T = null> {
   success: boolean;
   message: string;
@@ -26,20 +24,17 @@ interface ApiResponse<T = null> {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-// Define ApiResponse if it's not already globally available
-// Ensure this is consistent with other util files if they also use it.
 interface ApiResponse<T = null> {
   success: boolean;
   message: string;
   data?: T;
-  error?: string; // For error messages from the server or client-side errors
+  error?: string;
 }
 
 interface ApiErrorResponse {
   detail?: string | { msg: string; type: string }[];
 }
 
-// Helper function to handle API responses
 async function handleApiResponse<T>(response: Response, operationName: string): Promise<ApiResponse<T>> {
   try {
     if (!response.ok) {
@@ -54,14 +49,12 @@ async function handleApiResponse<T>(response: Response, operationName: string): 
           errorDetail = (errorData as { message: string }).message;
         }
       } catch {
-        // Could not parse error JSON, use status text or generic message
         errorDetail = response.statusText || `HTTP error ${response.status} during ${operationName}.`;
       }
       console.error("API Error:", errorDetail, "Status:", response.status);
       return { success: false, message: errorDetail, error: errorDetail };
     }
 
-    // If response is OK but no content (e.g., 204 for DELETE)
     if (response.status === 204) {
       return { success: true, message: `${operationName} successful.`, data: null as T };
     }
@@ -86,7 +79,6 @@ export async function getQuotePage(
   if (filters?.authorId) {
     url += `&author_id=${filters.authorId}`;
   }
-  // TODO: Add tag filter if present: if (filters?.tag) { url += `&tag=${encodeURIComponent(filters.tag)}`; }
   const response = await fetch(url);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: response.statusText }));
@@ -104,7 +96,6 @@ export async function getQuoteTotalPages(
   if (filters?.authorId) {
     url += `&author_id=${filters.authorId}`;
   }
-  // TODO: Add tag filter if present
   const response = await fetch(url);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: response.statusText }));
@@ -145,7 +136,7 @@ export function getPageIndices(currentPage: number, totalPages: number, surround
   return result;
 }
 
-export async function getQuoteById(quoteId: number): Promise<QuotePageEntry | null> { // Direct data or simple error
+export async function getQuoteById(quoteId: number): Promise<QuotePageEntry | null> {
   console.log(`API CALL: Fetching quote by ID: ${quoteId}`);
   const response = await fetch(`${API_BASE_URL}/quotes/${quoteId}`);
   if (response.status === 404) {
@@ -170,7 +161,6 @@ export async function submitNewQuote(payload: NewQuotePayload): Promise<ApiRespo
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // TODO: Add Authorization header if needed: 'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(payload),
   });
@@ -189,7 +179,6 @@ export async function updateQuote(quoteId: number, payload: UpdateQuotePayload):
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      // TODO: Add Authorization header
     },
     body: JSON.stringify(payload),
   });
@@ -201,18 +190,16 @@ export async function deleteQuote(quoteId: number): Promise<ApiResponse<null>> {
   const response = await fetch(`${API_BASE_URL}/quotes/${quoteId}`, {
     method: 'DELETE',
     headers: {
-      // TODO: Add Authorization header
     },
   });
   return handleApiResponse<null>(response, "delete quote");
 }
 
-export async function favoriteQuote(quoteId: number): Promise<ApiResponse<null>> { // Favorite/unfavorite also benefit from ApiResponse
+export async function favoriteQuote(quoteId: number): Promise<ApiResponse<null>> {
   console.log(`API CALL: Favoriting quote ${quoteId}`);
   const response = await fetch(`${API_BASE_URL}/quotes/${quoteId}/favorite`, {
     method: 'POST',
     headers: {
-      // TODO: Add Authorization header
     },
   });
   return handleApiResponse<null>(response, "favorite quote");
@@ -223,63 +210,62 @@ export async function unfavoriteQuote(quoteId: number): Promise<ApiResponse<null
   const response = await fetch(`${API_BASE_URL}/quotes/${quoteId}/favorite`, {
     method: 'DELETE',
     headers: {
-      // TODO: Add Authorization header
     },
   });
   return handleApiResponse<null>(response, "unfavorite quote");
 }
 
-/**
- * Fetches quotes for the currently authenticated user.
- * Requires authentication token.
- */
+
 export async function getMyQuotes(token: string): Promise<ApiResponse<QuotePageEntry[]>> {
-  console.log("API CALL: Fetching my quotes");
+  console.log("API CALL: Fetching user's quotes.");
+  if (!token) {
+    console.error("Authentication token is required to fetch user quotes.");
+    return {
+      success: false,
+      message: "Authentication token is required.",
+      error: "Authentication token is required.",
+    };
+  }
+
   const response = await fetch(`${API_BASE_URL}/quotes/me`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
   });
-  // The backend returns model.QuoteCollection ({ quotes: List[Quote] })
-  // We need to ensure the transformation to QuotePageEntry[] happens if necessary,
-  // or that QuotePageEntry is compatible with backend model.Quote.
-  // For now, assuming direct compatibility or backend returns QuotePageEntry-like objects for this route.
-  // If backend returns model.Quote[], the handleApiResponse will work, but the component
-  // consuming it might need to adapt if it strictly expects QuotePageEntry fields like authorName.
-  // The `model.Quote` has `author_id` but not `authorName` directly.
-  // It also has `tags: List[Tag]` (object) vs `tags: string[]` in `QuotePageEntry`.
-  // This will need careful handling in the component or a mapping layer.
-  // For now, we will cast to QuotePageEntry[] and see.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const apiResponse = await handleApiResponse<any>(response, "fetch my quotes"); // Keep any for now due to complex backend/frontend type mismatch
-  if (apiResponse.success && apiResponse.data && Array.isArray(apiResponse.data.quotes)) {
-    return {
-      ...apiResponse,
-      data: apiResponse.data.quotes as QuotePageEntry[], // Attempt to cast items
-    };
+  return handleApiResponse<QuotePageEntry[]>(response, "fetch user quotes");
+}
+
+export async function searchQuotes(searchTerm: string, page: number = 1, limit: number = 9): Promise<PaginatedQuotesResponse> {
+  console.log(`API CALL: Searching quotes for '${searchTerm}', page ${page}, limit ${limit}`);
+  const response = await fetch(
+    `${API_BASE_URL}/quotes/search?query=${encodeURIComponent(searchTerm)}&page=${page}&limit=${limit}`
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to search quotes for '${searchTerm}'`);
   }
-  // If the structure is not { quotes: [] }, return the original response or an error
-  if (apiResponse.success && apiResponse.data && !Array.isArray(apiResponse.data.quotes)){
-    // This case means the backend didn't return a QuoteCollection like {quotes: []}
-    // but something else, or the structure is just List[Quote] directly.
-    // If it's List[Quote] directly and Quote is compatible enough with QuotePageEntry:
-    if(Array.isArray(apiResponse.data)){
-        return {
-            ...apiResponse,
-            data: apiResponse.data as QuotePageEntry[]
-        };
-    }
-    return {
-        success: false,
-        message: "Invalid data structure for my quotes.",
-        error: "Invalid data structure",
-        data: []
-    };
+  return response.json();
+}
+
+export async function generateTags(text: string, author: string): Promise<string[]> {
+  console.log(`API CALL: Generating tags for quote text: "${text}", author: "${author}"`);
+  const response = await fetch(`${API_BASE_URL}/tags/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ quote: text, author: author }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: "Failed to generate tags" }));
+    const errorMessage = typeof errorData.detail === 'string' ? errorData.detail : "Failed to generate tags due to an unknown error.";
+    console.error("Tag generation failed:", errorMessage);
+    throw new Error(errorMessage);
   }
-  return {
-    ...apiResponse, // Return original error or success with unexpected data structure
-    data: [], // Ensure data is an array even on error/unexpected structure
-  };
+
+  const data = await response.json();
+  return data as string[];
 }
