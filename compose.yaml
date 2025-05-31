@@ -67,11 +67,11 @@ services:
         context: ./backend
       ports:
         - "8000:8000"
-  frontend-next:
-    image: frontend-next
+  frontend:
+    image: frontend
     restart: always
     build:
-      context: ./frontend-next
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
