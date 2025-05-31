@@ -26,4 +26,4 @@ PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql -h "${POSTGRES_SERVER:-db}" -p 
 PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql -h "${POSTGRES_SERVER:-db}" -p "${POSTGRES_PORT:-5432}" -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-quoteweave_demo}" -c "SELECT setval(pg_get_serial_sequence('quote', 'id'), COALESCE(MAX(id), 1), true) FROM quote;"
 PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql -h "${POSTGRES_SERVER:-db}" -p "${POSTGRES_PORT:-5432}" -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-quoteweave_demo}" -c "SELECT setval(pg_get_serial_sequence('collection', 'id'), COALESCE(MAX(id), 1), true) FROM collection;"
 
-python cli.py create user --name admin --email "admin@example.com" --password admin
+python cli.py create user --name admin --email "admin@example.com" --password "Admin@123"

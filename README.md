@@ -8,6 +8,13 @@ QuoteWeave: a site to create, find, and share quotes.
 - You can only delete and edit a quote if the username matches the author exactly.
 - The user password (`password_hash` in the diagram and schema) is hashed. For demonstration purposes, this hashing is deterministic due to the use of static salts, which is not secure for production.
 
+## Demo Credentials
+
+For demonstration purposes, you can use the following credentials:
+- **Username**: user
+- **Email**: user@example.com
+- **Password**: 123abc@XUZ
+
 ## Database Model (E/R Diagram)
 
 ![Entity/Relationship Diagram for QuoteWeave](diagram/diagram_v1.png)
