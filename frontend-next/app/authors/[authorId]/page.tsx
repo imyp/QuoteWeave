@@ -320,7 +320,11 @@ export default function AuthorPage() {
                       </Badge>
                     </CardContent>
                     <CardFooter className="text-xs p-3 border-t border-border/50 mt-auto flex justify-between items-center">
-                      <span>{collectionEntry.quoteCount} {collectionEntry.quoteCount === 1 ? "quote" : "quotes"}</span>
+                      {collectionEntry.isPublic ? (
+                        <span>{collectionEntry.quoteCount} {collectionEntry.quoteCount === 1 ? "quote" : "quotes"}</span>
+                      ) : (
+                        <span className="italic">Private collection</span>
+                      )}
                       <Link href={`/collections/${collectionEntry.id}`} passHref>
                         <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90 h-auto p-0 text-xs">View</Button>
                       </Link>
