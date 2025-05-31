@@ -99,4 +99,3 @@ The main directories in this repository are:
 - `models/`: Contains resources related to machine learning models, including notebooks for training.
 - `diagram/`: Contains the E/R diagram source file (`main.tex`) and the rendered PDF (`diagram.pdf`).
 - `assets/`: Contains images and other static assets used in the README and potentially by the application.
-- `_old_frontend/`: Contains a previous, now archived, version of the frontend (React + Vite).
