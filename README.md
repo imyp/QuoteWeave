@@ -84,4 +84,13 @@ The QuoteWeave web application:
 ## Project Repository
 The git repository for this project contains all source code, the E/R diagram, and this README file.
 
-**Note:** The `_old_frontend` directory contains a previous version of the frontend and is no longer in use. The current frontend code can be found in the `frontend-next` directory.
+## Repository Structure
+
+The main directories in this repository are:
+
+- `backend/`: Contains the Python backend server (FastAPI).
+- `frontend-next/`: Contains the current Next.js frontend application.
+- `models/`: Contains resources related to machine learning models, including notebooks for training.
+- `diagram/`: Contains the E/R diagram source file (`main.tex`) and the rendered PDF (`diagram.pdf`).
+- `assets/`: Contains images and other static assets used in the README and potentially by the application.
+- `_old_frontend/`: Contains a previous, now archived, version of the frontend (React + Vite).
