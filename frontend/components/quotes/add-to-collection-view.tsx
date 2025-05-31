@@ -135,7 +135,7 @@ export default function AddToCollectionView({ quote, userId, authToken, onCollec
           <Link href="/collections/new" className="text-primary hover:underline ml-1">
             Create one now
           </Link>
-          to manage your quotes.
+          &nbsp;to manage your quotes.
         </p>
       </div>
     );
