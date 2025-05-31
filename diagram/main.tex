@@ -53,13 +53,22 @@
 \end{tikzpicture}
   \caption{The entity/relationship diagram for QuoteWeave.\label{fig:er}}
 \end{figure}
+
 The relations are shown below.
+
 \texttt{Author(id:integer, name:text)}
+
 \texttt{User(id:integer, author\_id:integer, email:text, password\_hash:text, created\_at:timestamptz)}
+
 \texttt{Collection(id:integer, author\_id:integer, name:text, description:text, is\_public:boolean, created\_at:timestamptz, updated\_at:timestamptz)}
+
 \texttt{Quote(id:integer, author\_id:integer, text:text, is\_public:boolean, embedding:vector, created\_at:timestamptz, updated\_at:timestamptz)}
+
 \texttt{TaggedAs(quote\_id:integer, tag\_id:integer)}
+
 \texttt{Tag(id:integer, name:text)}
+
 \texttt{UserQuoteFavorite(user\_id:integer, quote\_id:integer, created\_at:timestamptz)}
+
 \texttt{CollectionContains(collection\_id:integer, quote\_id:integer, added\_at:timestamptz)}
 \end{document}
