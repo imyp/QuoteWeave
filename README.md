@@ -100,4 +100,4 @@ The main directories in this repository are:
 - `frontend/`: Contains the current Next.js frontend application.
 - `models/`: Contains resources related to machine learning models, including notebooks for training.
 - `diagram/`: Contains the E/R diagram source file (`main.tex`) and the rendered PDF (`diagram.pdf`).
-- `assets/`: Contains images and other static assets used in the README and potentially by the application.
+- `assets/`: Contains images and other static assets used in the README.
